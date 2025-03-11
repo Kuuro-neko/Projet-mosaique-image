@@ -153,6 +153,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
         
     }
 
+    
     return mosaic;
 }
 
