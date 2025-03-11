@@ -70,7 +70,7 @@ double computeDistance(Color a, Color b){
     return sqrt(pow(a.r - b.r, 2) + pow(a.g - b.g, 2) + pow(a.b - b.b, 2));
 }
 
-cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, Color> &meanValues, int blockSize){
+cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &meanValues, int blockSize, bool reuseImages = false){
 
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
@@ -112,6 +112,9 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, Co
 
 
             bestMatchImg.copyTo(mosaic(roi));
+
+            // remove used image from the map
+            if (!reuseImages) meanValues.erase(bestMatch);
         }
         
     }
