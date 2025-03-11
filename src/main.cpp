@@ -10,6 +10,12 @@
 using namespace cv;
 namespace fs = std::filesystem;
 
+struct Color{
+    double r;
+    double g;
+    double b;
+};
+
 // chargement base d'imagettes
 std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
 
@@ -25,15 +31,15 @@ std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
     return images;
 }
 
-std::map<std::string, double> preprocessDataset(const std::string& folderPath){
-    std::map<std::string, double> meanValues;
+std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
+    std::map<std::string, Color> meanValues;
 
     for(const auto& entry : fs::directory_iterator(folderPath)){
 
         cv::Mat img = cv::imread(entry.path().string());
 
         cv::Scalar mean = cv::mean(img);
-        meanValues[entry.path().string()] = mean[0];
+        meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
     }
 
     return meanValues;
@@ -60,11 +66,11 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
     
 }
 
-double computeDistance(double a, double b){
-    return std::abs(a - b);
+double computeDistance(Color a, Color b){
+    return sqrt(pow(a.r - b.r, 2) + pow(a.g - b.g, 2) + pow(a.b - b.b, 2));
 }
 
-cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, double> &meanValues, int blockSize){
+cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, Color> &meanValues, int blockSize){
 
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
@@ -84,14 +90,14 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, do
             cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
             cv::Mat block = mosaic(roi).clone();
 
-            cv::Scalar mean = cv::mean(block);
+            Color mean = {cv::mean(block)[2], cv::mean(block)[1], cv::mean(block)[0]};
 
             double minDistance = std::numeric_limits<double>::max();
             std::string bestMatch;
 
             for(const auto& entry : meanValues){
-                double second = entry.second;
-                double distance = computeDistance(mean[0], second);
+                Color second = entry.second;
+                double distance = computeDistance(mean, second);
 
                 if(distance < minDistance){
                     minDistance = distance;
@@ -113,11 +119,13 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, const std::map<std::string, do
     return mosaic;
 }
 
+
+
 int main(int argc, char** argv )
 {
-    if ( argc != 3 )
+    if ( argc != 4 )
     {
-        printf("usage: %s <Image_Path> <DATASET_Folder_Path>\n", argv[0]);
+        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size>\n", argv[0]);
         return -1;
     }
 
@@ -127,20 +135,26 @@ int main(int argc, char** argv )
         return -1;
     }
 
+    int blockSize = std::stoi(argv[3]);
+
+    if (inputImage.size().width % blockSize != 0 || inputImage.size().height % blockSize != 0){
+        std::cout << "La taille de l'image n'est pas un multiple de la taille du bloc : " << blockSize << ", taille de l'image : " << inputImage.size() << std::endl;
+        return -1;
+    }
+
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
     
     // if mean_values.txt exists, load the mean values from the file
-    std::map<std::string, double> meanValues;
+    std::map<std::string, Color> meanValues;
     if(fs::exists("mean_values.txt")){
         std::cout << "Loading mean values from file" << std::endl;
         std::ifstream file("mean_values.txt");
-        
         std::string line;
         while(std::getline(file, line)){
             std::istringstream iss(line);
             std::string key;
-            double value;
-            iss >> key >> value;
+            Color value;
+            iss >> key >> value.r >> value.g >> value.b;
             meanValues[key] = value;
         }
         file.close();
@@ -151,14 +165,16 @@ int main(int argc, char** argv )
         // Write the mean values to a file
         std::ofstream file("mean_values.txt");
         for(const auto& entry : meanValues){
-            file << entry.first << " " << entry.second << std::endl;
+            file << entry.first << " ";
+            file << entry.second.r << " ";
+            file << entry.second.g << " ";
+            file << entry.second.b << std::endl;
         }
         file.close();
     }
 
+    std::cout << "Generating mosaic" << std::endl;
 
-    //générer la mosaique
-    int blockSize = 32;
     cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize);
 
     cv::namedWindow("Mosaïque", cv::WINDOW_AUTOSIZE);
