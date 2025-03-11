@@ -1,3 +1,5 @@
 build/
 .vscode/
 dataset/
+mean_values.txt
+mosaic_output.jpg
