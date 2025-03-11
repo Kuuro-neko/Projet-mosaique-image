@@ -16,10 +16,25 @@ std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
 
         cv::Mat img = cv::imread(entry.path().string());
 
+        if(img.empty()){
+            printf("Impossible de charger ", entry.path());
+            continue;
+        }
+
         images.push_back(img);
     }
 
     return images;
+}
+
+//retourner une image carrée
+cv::Mat extractCenteredSquare(const cv::Mat& image){
+    int size = std::min(image.cols, image.rows); 
+
+    cv::Rect roi(0,0, size, size);
+    image = image(roi).clone();
+
+    return image;
 }
 
 
@@ -33,7 +48,10 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
     for (int y = 0; y < height; y += blockSize) {
         for (int x = 0; x < width; x+= blockSize)
         {
-            cv::Rect roi(x, y, blockSize, blockSize);
+            int blockWidth = std::min(blockSize, width - x);
+            int blockHeight = std::min(blockSize, height - y);
+
+            cv::Rect roi(x, y, blockWidth, blockHeight);
             cv::Mat block = image(roi).clone();
             blocks.push_back(block);
         } 
@@ -45,9 +63,15 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
 
 double computeDistance(const cv::Mat& img1, const cv::Mat& img2){
 
-    return 1;
+    cv::Scalar mean1 = cv::mean(img1);
+    cv::Scalar mean2 = cv::mean(img2);
+
+    double distance = sqrt(pow(mean1[0] - mean2[0], 2) + pow(mean1[1] - mean2[1], 2) + pow(mean1[2] - mean2[2], 2)); // B -- V -- R
+
+    return distance;
 }
 
+//génération de mosaique
 cv::Mat generateMosaic(const cv::Mat& inputImage, const std::vector<cv::Mat>& tileImages, int blockSize){
 
     cv::Mat mosaic = inputImage.clone();
@@ -90,7 +114,7 @@ int main(int argc, char** argv )
     }
 
     std::vector<cv::Mat> tileImages = loadImagesFromFolder(argv[2]);
-    if(inputImage.empty()) {
+    if(tileImages.empty()) {
         printf("Aucune imagette trouvée.");
         return -1;
     }
