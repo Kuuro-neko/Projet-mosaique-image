@@ -36,16 +36,6 @@ std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
     return images;
 }
 
-<<<<<<< HEAD
-//retourner une image carrée
-cv::Mat extractCenteredSquare(const cv::Mat& image){
-    int size = std::min(image.cols, image.rows); 
-
-    cv::Rect roi(0,0, size, size);
-    image = image(roi).clone();
-
-    return image;
-=======
 std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
     std::map<std::string, Color> meanValues;
 
@@ -58,7 +48,6 @@ std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
     }
 
     return meanValues;
->>>>>>> 8c88ca582eedf83a384d3e1d44125574b0f97dae
 }
 
 
@@ -85,26 +74,11 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
     
 }
 
-<<<<<<< HEAD
-double computeDistance(const cv::Mat& img1, const cv::Mat& img2){
-
-    cv::Scalar mean1 = cv::mean(img1);
-    cv::Scalar mean2 = cv::mean(img2);
-
-    double distance = sqrt(pow(mean1[0] - mean2[0], 2) + pow(mean1[1] - mean2[1], 2) + pow(mean1[2] - mean2[2], 2)); // B -- V -- R
-
-    return distance;
-}
-
-//génération de mosaique
-cv::Mat generateMosaic(const cv::Mat& inputImage, const std::vector<cv::Mat>& tileImages, int blockSize){
-=======
 double computeDistance(Color a, Color b){
     return sqrt(pow(a.r - b.r, 2) + pow(a.g - b.g, 2) + pow(a.b - b.b, 2));
 }
 
 cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &meanValues, int blockSize, bool reuseImages = false){
->>>>>>> 8c88ca582eedf83a384d3e1d44125574b0f97dae
 
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
@@ -173,16 +147,10 @@ int main(int argc, char** argv )
         return -1;
     }
 
-<<<<<<< HEAD
-    std::vector<cv::Mat> tileImages = loadImagesFromFolder(argv[2]);
-    if(tileImages.empty()) {
-        printf("Aucune imagette trouvée.");
-=======
     int blockSize = std::stoi(argv[3]);
 
     if (inputImage.size().width % blockSize != 0 || inputImage.size().height % blockSize != 0){
         std::cout << "La taille de l'image n'est pas un multiple de la taille du bloc : " << blockSize << ", taille de l'image : " << inputImage.size() << std::endl;
->>>>>>> 8c88ca582eedf83a384d3e1d44125574b0f97dae
         return -1;
     }
 
