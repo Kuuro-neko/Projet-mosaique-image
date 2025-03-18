@@ -10,33 +10,16 @@
 using namespace cv;
 namespace fs = std::filesystem;
 
+#define MEANCOLORS_FILE "mean_values.txt"
+
 struct Color{
     double r;
     double g;
     double b;
 };
 
-// chargement base d'imagettes
-std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
-
-    std::vector<cv::Mat> images;
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-
-        cv::Mat img = cv::imread(entry.path().string());
-
-        if(img.empty()){
-            printf("Impossible de charger ", entry.path());
-            continue;
-        }
-
-        images.push_back(img);
-    }
-
-    return images;
-}
-
-std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
+// précalcul des moyennes des couleurs des images du dataset
+std::map<std::string, Color> preprocessDatasetMeanColor(const std::string& folderPath){
     std::map<std::string, Color> meanValues;
 
     for(const auto& entry : fs::directory_iterator(folderPath)){
@@ -79,15 +62,11 @@ double computeDistance(Color a, Color b){
 }
 
 cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &meanValues, int blockSize, bool reuseImages = false){
-
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
 
     int rowBlocks = inputImage.rows / blockSize;
-
     int colBlocks = inputImage.cols / blockSize;
-
-    
 
     for (int i = 0; i < rowBlocks; i++)
     {
@@ -126,8 +105,6 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
         }
         
     }
-
-    
     return mosaic;
 }
 
@@ -158,9 +135,9 @@ int main(int argc, char** argv )
     
     // if mean_values.txt exists, load the mean values from the file
     std::map<std::string, Color> meanValues;
-    if(fs::exists("mean_values.txt")){
+    if(fs::exists(MEANCOLORS_FILE)){
         std::cout << "Loading mean values from file" << std::endl;
-        std::ifstream file("mean_values.txt");
+        std::ifstream file(MEANCOLORS_FILE);
         std::string line;
         while(std::getline(file, line)){
             std::istringstream iss(line);
@@ -172,10 +149,10 @@ int main(int argc, char** argv )
         file.close();
     } else {
         std::cout << "Preprocessing the dataset" << std::endl;
-        meanValues = preprocessDataset(argv[2]);
+        meanValues = preprocessDatasetMeanColor(argv[2]);
     
         // Write the mean values to a file
-        std::ofstream file("mean_values.txt");
+        std::ofstream file(MEANCOLORS_FILE);
         for(const auto& entry : meanValues){
             file << entry.first << " ";
             file << entry.second.r << " ";
