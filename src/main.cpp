@@ -123,7 +123,35 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
     return mosaic;
 }
 
+std::map<std::string, Color> checkIfAlreadyPreProcessed(const std::string& folderPath){
+    std::map<std::string, Color> meanValues;
 
+    for(const auto& entry : fs::directory_iterator(folderPath)){
+
+        std::string filename = entry.path().string();
+        filename = filename.substr(filename.find_last_of("/\\") + 1);
+
+        if(fs::exists("mean_values.txt")){
+            std::ifstream file("mean_values.txt");
+            std::string line;
+            while(std::getline(file, line)){
+                std::istringstream iss(line);
+                std::string key;
+                Color value;
+                iss >> key >> value.r >> value.g >> value.b;
+                meanValues[key] = value;
+            }
+            file.close();
+        } else {
+            cv::Mat img = cv::imread(entry.path().string());
+
+            cv::Scalar mean = cv::mean(img);
+            meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
+        }
+    }
+
+    return meanValues;
+}
 
 int main(int argc, char** argv )
 {
@@ -148,34 +176,7 @@ int main(int argc, char** argv )
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
     
-    // if mean_values.txt exists, load the mean values from the file
-    std::map<std::string, Color> meanValues;
-    if(fs::exists("mean_values.txt")){
-        std::cout << "Loading mean values from file" << std::endl;
-        std::ifstream file("mean_values.txt");
-        std::string line;
-        while(std::getline(file, line)){
-            std::istringstream iss(line);
-            std::string key;
-            Color value;
-            iss >> key >> value.r >> value.g >> value.b;
-            meanValues[key] = value;
-        }
-        file.close();
-    } else {
-        std::cout << "Preprocessing the dataset" << std::endl;
-        meanValues = preprocessDataset(argv[2]);
-    
-        // Write the mean values to a file
-        std::ofstream file("mean_values.txt");
-        for(const auto& entry : meanValues){
-            file << entry.first << " ";
-            file << entry.second.r << " ";
-            file << entry.second.g << " ";
-            file << entry.second.b << std::endl;
-        }
-        file.close();
-    }
+    std::map<std::string, Color> meanValues = checkIfAlreadyPreProcessed(argv[2]);
 
     std::cout << "Generating mosaic" << std::endl;
 
