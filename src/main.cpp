@@ -49,8 +49,83 @@ struct Tamura{
     double directionality;
 };
 
-// précalcul des moyennes des couleurs des images du dataset
-std::map<std::string, StatisticalFeatures> preprocessDatasetMeanColor(const std::string& folderPath){
+/**
+ * @brief Parameters for the generation of the mosaic
+ * 
+ */
+struct GenerateMosaicParams{
+    bool meanColor = true;
+    bool variance = false;
+    bool skewness = false;
+    bool energy = false;
+    bool reuseImages = false;
+    
+    /**
+     * @brief Construct a new Generate Mosaic Params object, default constructor
+     * 
+     * @param meanColor 
+     * @param variance 
+     * @param skewness 
+     * @param energy 
+     * @param reuseImages 
+     */
+    GenerateMosaicParams(bool meanColor = true, bool variance = false, bool skewness = false, bool energy = false, bool reuseImages = false) : meanColor(meanColor), variance(variance), skewness(skewness), energy(energy), reuseImages(reuseImages) {}
+    
+    void setFromBitArray(const std::string& bitArray){
+        meanColor = bitArray[0] == '1';
+        variance = bitArray[1] == '1';
+        skewness = bitArray[2] == '1';
+        energy = bitArray[3] == '1';
+        reuseImages = bitArray[4] == '1';
+    }
+
+    std::string toString() const {
+        std::string result = "meanColor : " + std::to_string(meanColor) + ", ";
+        result += "variance : " + std::to_string(variance) + ", ";
+        result += "skewness : " + std::to_string(skewness) + ", ";
+        result += "energy : " + std::to_string(energy) + ", ";
+        result += "reuseImages : " + std::to_string(reuseImages);
+        return result;
+    }
+};
+
+/**
+ * @brief Extraction des statistiques d'une image
+ * 
+ * @param img 
+ * @return StatisticalFeatures 
+ */
+StatisticalFeatures processImageStats(const cv::Mat& img){
+    // Color
+    cv::Scalar mean = cv::mean(img);
+    Color c = {mean[2], mean[1], mean[0]};
+
+    // Variance & Energy
+    cv::Scalar variance;
+    cv::Scalar meanSquares;
+    cv::meanStdDev(img, meanSquares, variance);
+    Variance v = {variance[2], variance[1], variance[0]};
+    Energy e = {meanSquares[2], meanSquares[1], meanSquares[0]};
+
+    // Skewness
+    cv::Scalar meanCubed;
+    cv::Scalar meanCubedTimesMean;
+    cv::meanStdDev(img.mul(img.mul(img)), meanCubed, variance);
+    cv::meanStdDev(img.mul(img.mul(img.mul(img))), meanCubedTimesMean, variance);
+    Skewness s = {meanCubed[2] - 3 * mean[2] * meanSquares[2] + 2 * mean[2] * mean[2] * mean[2],
+                    meanCubed[1] - 3 * mean[1] * meanSquares[1] + 2 * mean[1] * mean[1] * mean[1],
+                    meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
+    
+    return {c, v, s, e};
+}
+
+/**
+ * @brief Prétraitement du dataset pour obtenir les statistiques des images
+ * 
+ * @param folderPath 
+ * @return std::map<std::string, StatisticalFeatures> 
+ */
+std::map<std::string, StatisticalFeatures> preprocessDatasetStats(const std::string& folderPath){
     std::map<std::string, StatisticalFeatures> meanValues;
 
     int progress = 0;
@@ -59,28 +134,9 @@ std::map<std::string, StatisticalFeatures> preprocessDatasetMeanColor(const std:
     for(const auto& entry : fs::directory_iterator(folderPath)){
         try {
             cv::Mat img = cv::imread(entry.path().string());
-    
-            // Color
-            cv::Scalar mean = cv::mean(img);
-            Color c = {mean[2], mean[1], mean[0]};
-    
-            // Variance
-            cv::Scalar variance;
-            cv::Scalar meanSquares;
-            cv::meanStdDev(img, meanSquares, variance);
-            Variance v = {variance[2], variance[1], variance[0]};
-            Energy e = {meanSquares[2], meanSquares[1], meanSquares[0]};
-    
-            // Skewness
-            cv::Scalar meanCubed;
-            cv::Scalar meanCubedTimesMean;
-            cv::meanStdDev(img.mul(img.mul(img)), meanCubed, variance);
-            cv::meanStdDev(img.mul(img.mul(img.mul(img))), meanCubedTimesMean, variance);
-            Skewness s = {meanCubed[2] - 3 * mean[2] * meanSquares[2] + 2 * mean[2] * mean[2] * mean[2],
-                          meanCubed[1] - 3 * mean[1] * meanSquares[1] + 2 * mean[1] * mean[1] * mean[1],
-                          meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
             
-            meanValues[entry.path().string()] = {c, v, s, e};
+            meanValues[entry.path().string()] = processImageStats(img);
+
             progress++;
             if (progress % 250 == 0){
                 std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
@@ -102,16 +158,22 @@ std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderP
 
         cv::Mat img = cv::imread(entry.path().string());
 
+        // TO DO ?
 
-
-        tamuraValues[entry.path().string()] = {0, 0, 0};
+        tamuraValues[entry.path().string()] = {0, 0, 0}; // TO REPLACE
     }
 
     return tamuraValues;
 }
 
 
-// découpage en bloc
+/**
+ * @brief Découpe une image en blocs de taille blockSize
+ * 
+ * @param image 
+ * @param blockSize 
+ * @return std::vector<cv::Mat> 
+ */
 std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
     std::vector<cv::Mat> blocks;
 
@@ -134,11 +196,42 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
     
 }
 
-double computeDistance(Color a, Color b){
-    return sqrt(pow(a.r - b.r, 2) + pow(a.g - b.g, 2) + pow(a.b - b.b, 2));
+/**
+ * @brief Calcul de la distance entre deux images
+ * 
+ * @param a 
+ * @param b 
+ * @param params 
+ * @return double 
+ */
+double computeDistance(StatisticalFeatures a, StatisticalFeatures b, GenerateMosaicParams params){
+    double distance = 0;
+    if(params.meanColor){
+        distance += sqrt(pow(a.mean.r - b.mean.r, 2) + pow(a.mean.g - b.mean.g, 2) + pow(a.mean.b - b.mean.b, 2));
+    }
+    if(params.variance){
+        distance += sqrt(pow(a.variance.r - b.variance.r, 2) + pow(a.variance.g - b.variance.g, 2) + pow(a.variance.b - b.variance.b, 2));
+    }
+    if(params.skewness){
+        distance += sqrt(pow(a.skewness.r - b.skewness.r, 2) + pow(a.skewness.g - b.skewness.g, 2) + pow(a.skewness.b - b.skewness.b, 2));
+    }
+    if(params.energy){
+        distance += sqrt(pow(a.energy.r - b.energy.r, 2) + pow(a.energy.g - b.energy.g, 2) + pow(a.energy.b - b.energy.b, 2));
+    }
+    return distance;
 }
 
-cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, StatisticalFeatures> &meanValues, int blockSize, bool reuseImages = false){
+/**
+ * @brief Génère une mosaïque à partir d'une image et d'un ensemble d'images de référence
+ * 
+ * @param inputImage 
+ * @param meanValues 
+ * @param blockSize 
+ * @param params 
+ * @return cv::Mat 
+ */
+cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, StatisticalFeatures> &meanValues, int blockSize, GenerateMosaicParams params){
+    std::cout << "Generating mosaic with parameters : block size : " << blockSize << ", " << params.toString() << std::endl;
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
 
@@ -155,14 +248,14 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
             cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
             cv::Mat block = mosaic(roi).clone();
 
-            Color mean = {cv::mean(block)[2], cv::mean(block)[1], cv::mean(block)[0]};
+            StatisticalFeatures blockStats = processImageStats(block);
 
             double minDistance = std::numeric_limits<double>::max();
             std::string bestMatch;
 
             for(const auto& entry : meanValues){
-                Color second = entry.second.mean;
-                double distance = computeDistance(mean, second);
+                StatisticalFeatures second = entry.second;
+                double distance = computeDistance(blockStats, second, params);
 
                 if(distance < minDistance){
                     minDistance = distance;
@@ -179,7 +272,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
             bestMatchImg.copyTo(mosaic(roi));
 
             // remove used image from the map
-            if (!reuseImages) meanValues.erase(bestMatch);
+            if (!params.reuseImages) meanValues.erase(bestMatch);
         }
 
         std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
@@ -188,6 +281,12 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
     return mosaic;
 }
 
+/**
+ * @brief Précalcul des statistiques des images du dataset si elles n'ont pas déjà été calculées
+ * 
+ * @param folderPath 
+ * @return std::map<std::string, StatisticalFeatures> 
+ */
 std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std::string& folderPath){
     std::map<std::string, StatisticalFeatures> meanValues;
 
@@ -208,7 +307,7 @@ std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std:
         file.close();
     } else {
         std::cout << "Preprocessing the dataset" << std::endl;
-        meanValues = preprocessDatasetMeanColor(folderPath);
+        meanValues = preprocessDatasetStats(folderPath);
     
         // Write the data to a file
         std::ofstream file(STATISTICAL_FEATURES_FILE);
@@ -224,6 +323,13 @@ std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std:
     return meanValues;
 }
 
+/**
+ * @brief Calcul du PSNR entre deux images
+ * 
+ * @param I1 
+ * @param I2 
+ * @return float 
+ */
 float PSNR(const cv::Mat& I1, const cv::Mat& I2)
 {
     cv::Mat s1;
@@ -247,9 +353,10 @@ float PSNR(const cv::Mat& I1, const cv::Mat& I2)
 
 int main(int argc, char** argv )
 {
-    if ( argc != 4 )
+    if ( argc < 4 || argc > 5 )
     {
-        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size>\n", argv[0]);
+        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size> [parameters as bit array]\n", argv[0]);
+        std::cout << "Parameters : meanColor, variance, skewness, energy, reuseImages. Ex : 10101" << std::endl;
         return -1;
     }
 
@@ -270,8 +377,19 @@ int main(int argc, char** argv )
 
     std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
 
-    std::cout << "Generating mosaic" << std::endl;
-    cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize);
+    GenerateMosaicParams params;
+    if (argc == 5){
+        params.setFromBitArray(argv[4]);
+    } else {
+        params.meanColor = true;
+        params.variance = true;
+        params.skewness = true;
+        params.energy = true;
+        params.reuseImages = false;
+    }
+
+    cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
+
     float psnr = PSNR(inputImage, mosaic);
     std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
 
@@ -280,20 +398,5 @@ int main(int argc, char** argv )
     cv::waitKey(0);
 
     cv::imwrite("mosaic_output.jpg", mosaic);
-
-
-    /*Mat image;
-    image = imread( argv[1], IMREAD_COLOR );
-
-    if ( !image.data )
-    {
-        printf("No image data \n");
-        return -1;
-    }
-    namedWindow("Display Image", WINDOW_AUTOSIZE );
-    imshow("Display Image", image);
-
-    waitKey(0);*/
-
     return 0;
 }
