@@ -380,13 +380,13 @@ int main(int argc, char** argv )
     GenerateMosaicParams params;
     if (argc == 5){
         params.setFromBitArray(argv[4]);
-    } else {
+    }/* else { // Example, this specific example is unnecessary because of the default constructor
         params.meanColor = true;
-        params.variance = true;
-        params.skewness = true;
-        params.energy = true;
+        params.variance = false;
+        params.skewness = false;
+        params.energy = false;
         params.reuseImages = false;
-    }
+    }*/
 
     cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
 
