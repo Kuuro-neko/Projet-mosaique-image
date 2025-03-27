@@ -108,7 +108,59 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
     return mosaic;
 }
 
+std::map<std::string, Color> checkIfAlreadyPreProcessed(const std::string& folderPath){
+    std::map<std::string, Color> meanValues;
 
+    if(fs::exists(MEANCOLORS_FILE)){
+        std::cout << "Loading mean values from file" << std::endl;
+        std::ifstream file(MEANCOLORS_FILE);
+        std::string line;
+        while(std::getline(file, line)){
+            std::istringstream iss(line);
+            std::string key;
+            Color value;
+            iss >> key >> value.r >> value.g >> value.b;
+            meanValues[key] = value;
+        }
+        file.close();
+    } else {
+        std::cout << "Preprocessing the dataset" << std::endl;
+        meanValues = preprocessDatasetMeanColor(folderPath);
+    
+        // Write the mean values to a file
+        std::ofstream file(MEANCOLORS_FILE);
+        for(const auto& entry : meanValues){
+            file << entry.first << " ";
+            file << entry.second.r << " ";
+            file << entry.second.g << " ";
+            file << entry.second.b << std::endl;
+        }
+        file.close();
+    }
+
+    return meanValues;
+}
+
+float PSNR(const cv::Mat& I1, const cv::Mat& I2)
+{
+    cv::Mat s1;
+    cv::absdiff(I1, I2, s1);   // |I1 - I2|
+    s1.convertTo(s1, CV_32F);  // cannot make a square on 8 bits
+    s1 = s1.mul(s1);           // |I1 - I2|^2
+
+    cv::Scalar s = cv::sum(s1);
+
+    double sse = s.val[0] + s.val[1] + s.val[2];
+
+    if( sse <= 1e-10)
+        return 0;
+    else
+    {
+        double mse = sse / (double)(I1.channels() * I1.total());
+        double psnr = 10.0 * log10((255 * 255) / mse);
+        return psnr;
+    }
+}
 
 int main(int argc, char** argv )
 {
@@ -132,39 +184,13 @@ int main(int argc, char** argv )
     }
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
-    
-    // if mean_values.txt exists, load the mean values from the file
-    std::map<std::string, Color> meanValues;
-    if(fs::exists(MEANCOLORS_FILE)){
-        std::cout << "Loading mean values from file" << std::endl;
-        std::ifstream file(MEANCOLORS_FILE);
-        std::string line;
-        while(std::getline(file, line)){
-            std::istringstream iss(line);
-            std::string key;
-            Color value;
-            iss >> key >> value.r >> value.g >> value.b;
-            meanValues[key] = value;
-        }
-        file.close();
-    } else {
-        std::cout << "Preprocessing the dataset" << std::endl;
-        meanValues = preprocessDatasetMeanColor(argv[2]);
-    
-        // Write the mean values to a file
-        std::ofstream file(MEANCOLORS_FILE);
-        for(const auto& entry : meanValues){
-            file << entry.first << " ";
-            file << entry.second.r << " ";
-            file << entry.second.g << " ";
-            file << entry.second.b << std::endl;
-        }
-        file.close();
-    }
+
+    std::map<std::string, Color> meanValues = checkIfAlreadyPreProcessed(argv[2]);
 
     std::cout << "Generating mosaic" << std::endl;
-
     cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize);
+    float psnr = PSNR(inputImage, mosaic);
+    std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
 
     cv::namedWindow("Mosaïque", cv::WINDOW_AUTOSIZE);
     cv::imshow("Mosaïque", mosaic);
