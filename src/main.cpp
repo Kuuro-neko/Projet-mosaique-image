@@ -68,11 +68,12 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
     int rowBlocks = inputImage.rows / blockSize;
     int colBlocks = inputImage.cols / blockSize;
 
+    int totalBlocks = rowBlocks * colBlocks;
+
     for (int i = 0; i < rowBlocks; i++)
     {
         for (int j = 0; j < colBlocks; j++)
         {
-            std::cout << "Computing block " << i << " " << j << std::endl;
 
             cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
             cv::Mat block = mosaic(roi).clone();
@@ -103,8 +104,10 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
             // remove used image from the map
             if (!reuseImages) meanValues.erase(bestMatch);
         }
-        
+
+        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
     }
+    std::cout << "Progress : 100%" << std::endl;
     return mosaic;
 }
 
