@@ -10,7 +10,7 @@
 using namespace cv;
 namespace fs = std::filesystem;
 
-#define MEANCOLORS_FILE "mean_values.txt"
+#define STATISTICAL_FEATURES_FILE "stats_features.txt"
 
 struct Color{
     double r;
@@ -18,19 +18,96 @@ struct Color{
     double b;
 };
 
+struct Variance{
+    double r;
+    double g;
+    double b;
+};
+
+struct Skewness{
+    double r;
+    double g;
+    double b;
+};
+
+struct Energy {
+    double r;
+    double g;
+    double b;
+};
+
+struct StatisticalFeatures{
+    Color mean;
+    Variance variance;
+    Skewness skewness;
+    Energy energy;
+};
+
+struct Tamura{
+    double coarseness;
+    double contrast;
+    double directionality;
+};
+
 // précalcul des moyennes des couleurs des images du dataset
-std::map<std::string, Color> preprocessDatasetMeanColor(const std::string& folderPath){
-    std::map<std::string, Color> meanValues;
+std::map<std::string, StatisticalFeatures> preprocessDatasetMeanColor(const std::string& folderPath){
+    std::map<std::string, StatisticalFeatures> meanValues;
+
+    int progress = 0;
+    int total = std::distance(fs::directory_iterator(folderPath), fs::directory_iterator{});
+
+    for(const auto& entry : fs::directory_iterator(folderPath)){
+        try {
+            cv::Mat img = cv::imread(entry.path().string());
+    
+            // Color
+            cv::Scalar mean = cv::mean(img);
+            Color c = {mean[2], mean[1], mean[0]};
+    
+            // Variance
+            cv::Scalar variance;
+            cv::Scalar meanSquares;
+            cv::meanStdDev(img, meanSquares, variance);
+            Variance v = {variance[2], variance[1], variance[0]};
+            Energy e = {meanSquares[2], meanSquares[1], meanSquares[0]};
+    
+            // Skewness
+            cv::Scalar meanCubed;
+            cv::Scalar meanCubedTimesMean;
+            cv::meanStdDev(img.mul(img.mul(img)), meanCubed, variance);
+            cv::meanStdDev(img.mul(img.mul(img.mul(img))), meanCubedTimesMean, variance);
+            Skewness s = {meanCubed[2] - 3 * mean[2] * meanSquares[2] + 2 * mean[2] * mean[2] * mean[2],
+                          meanCubed[1] - 3 * mean[1] * meanSquares[1] + 2 * mean[1] * mean[1] * mean[1],
+                          meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
+            
+            meanValues[entry.path().string()] = {c, v, s, e};
+            progress++;
+            if (progress % 250 == 0){
+                std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
+            }
+        } catch (cv::Exception& e){
+            // There is probably a json file in the dataset folder, catching it's error here
+            std::cout << std::endl;
+            std::cout << "Error while processing image : " << entry.path().string() << std::endl;
+        }
+    }
+    std::cout << "Progress : 100%" << std::endl;
+    return meanValues;
+}
+
+std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderPath){
+    std::map<std::string, Tamura> tamuraValues;
 
     for(const auto& entry : fs::directory_iterator(folderPath)){
 
         cv::Mat img = cv::imread(entry.path().string());
 
-        cv::Scalar mean = cv::mean(img);
-        meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
+
+
+        tamuraValues[entry.path().string()] = {0, 0, 0};
     }
 
-    return meanValues;
+    return tamuraValues;
 }
 
 
@@ -61,7 +138,7 @@ double computeDistance(Color a, Color b){
     return sqrt(pow(a.r - b.r, 2) + pow(a.g - b.g, 2) + pow(a.b - b.b, 2));
 }
 
-cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &meanValues, int blockSize, bool reuseImages = false){
+cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, StatisticalFeatures> &meanValues, int blockSize, bool reuseImages = false){
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
 
@@ -84,7 +161,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
             std::string bestMatch;
 
             for(const auto& entry : meanValues){
-                Color second = entry.second;
+                Color second = entry.second.mean;
                 double distance = computeDistance(mean, second);
 
                 if(distance < minDistance){
@@ -111,32 +188,35 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Color> &
     return mosaic;
 }
 
-std::map<std::string, Color> checkIfAlreadyPreProcessed(const std::string& folderPath){
-    std::map<std::string, Color> meanValues;
+std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std::string& folderPath){
+    std::map<std::string, StatisticalFeatures> meanValues;
 
-    if(fs::exists(MEANCOLORS_FILE)){
-        std::cout << "Loading mean values from file" << std::endl;
-        std::ifstream file(MEANCOLORS_FILE);
+    if(fs::exists(STATISTICAL_FEATURES_FILE)){
+        std::cout << "Loading statistical features from file" << std::endl;
+        std::ifstream file(STATISTICAL_FEATURES_FILE);
         std::string line;
         while(std::getline(file, line)){
             std::istringstream iss(line);
             std::string key;
-            Color value;
-            iss >> key >> value.r >> value.g >> value.b;
-            meanValues[key] = value;
+            Color c;
+            Variance v;
+            Skewness s;
+            Energy e;
+            iss >> key >> c.r >> c.g >> c.b >> v.r >> v.g >> v.b >> s.r >> s.g >> s.b >> e.r >> e.g >> e.b;
+            meanValues[key] = {c, v, s, e};
         }
         file.close();
     } else {
         std::cout << "Preprocessing the dataset" << std::endl;
         meanValues = preprocessDatasetMeanColor(folderPath);
     
-        // Write the mean values to a file
-        std::ofstream file(MEANCOLORS_FILE);
+        // Write the data to a file
+        std::ofstream file(STATISTICAL_FEATURES_FILE);
         for(const auto& entry : meanValues){
-            file << entry.first << " ";
-            file << entry.second.r << " ";
-            file << entry.second.g << " ";
-            file << entry.second.b << std::endl;
+            file << entry.first << " " << entry.second.mean.r << " " << entry.second.mean.g << " " << entry.second.mean.b << " "
+                 << entry.second.variance.r << " " << entry.second.variance.g << " " << entry.second.variance.b << " "
+                 << entry.second.skewness.r << " " << entry.second.skewness.g << " " << entry.second.skewness.b << " "
+                 << entry.second.energy.r << " " << entry.second.energy.g << " " << entry.second.energy.b << std::endl;
         }
         file.close();
     }
@@ -188,7 +268,7 @@ int main(int argc, char** argv )
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
 
-    std::map<std::string, Color> meanValues = checkIfAlreadyPreProcessed(argv[2]);
+    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
 
     std::cout << "Generating mosaic" << std::endl;
     cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize);
