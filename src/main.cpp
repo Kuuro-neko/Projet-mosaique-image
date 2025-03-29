@@ -89,21 +89,6 @@ struct GenerateMosaicParams{
     }
 };
 
-// chargement base d'imagettes
-std::vector<cv::Mat> loadImagesFromFolder(const std::string& folderPath){
-
-    std::vector<cv::Mat> images;
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-
-        cv::Mat img = cv::imread(entry.path().string());
-
-        images.push_back(img);
-    }
-
-    return images;
-}
-
 /**
  * @brief Extraction des statistiques d'une image
  * 
