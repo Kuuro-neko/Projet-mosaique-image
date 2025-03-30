@@ -199,6 +199,20 @@ std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderP
     return tamuraValues;
 }
 
+std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
+    std::map<std::string, Color> meanValues;
+
+    for(const auto& entry : fs::directory_iterator(folderPath)){
+
+        cv::Mat img = cv::imread(entry.path().string());
+
+        cv::Scalar mean = cv::mean(img);
+        meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
+    }
+
+    return meanValues;
+}
+
 
 /**
  * @brief Découpe une image en blocs de taille blockSize
@@ -284,50 +298,179 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
     std::cout << "Generating mosaic with parameters : block size : " << blockSize << ", " << params.toString() << std::endl;
     cv::Mat mosaic = inputImage.clone();
     std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
-
     int rowBlocks = inputImage.rows / blockSize;
     int colBlocks = inputImage.cols / blockSize;
-
     int totalBlocks = rowBlocks * colBlocks;
-
-    for (int i = 0; i < rowBlocks; i++)
-    {
-        for (int j = 0; j < colBlocks; j++)
+    if (params.reuseImages){
+        std::vector<std::vector<double>> distances;
+        std::vector<std::vector<std::string>> bestMatches;
+        std::cout << "Calculating distances" << std::endl;
+        for (int i = 0; i < rowBlocks; i++)
         {
-
-            cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-            cv::Mat block = mosaic(roi).clone();
-
-            StatisticalFeatures blockStats = processImageStats(block);
-
-            double minDistance = std::numeric_limits<double>::max();
-            std::string bestMatch;
-
-            for(const auto& entry : meanValues){
-                StatisticalFeatures second = entry.second;
-                double distance = computeDistance(blockStats, second, params);
-
-                if(distance < minDistance){
-                    minDistance = distance;
-                    bestMatch = entry.first;
+            for (int j = 0; j < colBlocks; j++)
+            {
+                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
+                cv::Mat block = mosaic(roi).clone();
+                StatisticalFeatures blockStats = processImageStats(block);
+                std::vector<std::string> listeMatch;
+                std::vector<double> listeDistance;
+                for(const auto& entry : meanValues){
+                    StatisticalFeatures second = entry.second;
+                    double distance = computeDistance(blockStats, second, params);
+                    if(listeDistance.size()==0){
+                        listeMatch.push_back(entry.first);
+                        listeDistance.push_back(distance);
+                    }
+                    else{
+                        if(listeDistance[0]>distance){
+                            listeDistance.insert(listeDistance.begin(),distance);
+                            listeMatch.insert(listeMatch.begin(),entry.first);
+                            if(listeDistance.size()>rowBlocks*colBlocks){
+                                listeDistance.pop_back();
+                                listeMatch.pop_back();
+                            }
+                        }
+                        else{
+                            if(distance<listeDistance[listeDistance.size()-1]){
+                                bool a=true;
+                                for(int m=listeDistance.size()-1;m>=0;m--){
+                                    if(distance>listeDistance[m]){
+                                        listeDistance.insert(listeDistance.begin()+m,distance);
+                                        listeMatch.insert(listeMatch.begin()+m,entry.first);
+                                        if(listeDistance.size()>rowBlocks*colBlocks){
+                                            listeDistance.pop_back();
+                                            listeMatch.pop_back();
+                                        }
+                                        a=false;
+                                        break;
+                                    }
+                                }
+                                if(listeDistance.size()<rowBlocks*colBlocks){
+                                    if(a){
+                                        listeDistance.push_back(distance);
+                                        listeMatch.push_back(entry.first);
+                                    }
+                                }
+                            }else{
+                                if(listeDistance.size()<rowBlocks*colBlocks){
+                                    listeDistance.push_back(distance);
+                                    listeMatch.push_back(entry.first);
+                                }
+                            }
+                        }
+                    }
+                }
+                distances.push_back(listeDistance);
+                bestMatches.push_back(listeMatch);
+            }
+            std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+        }
+        std::cout << "Progress : 100%" << std::endl;
+        std::vector<std::string> listeMatch;
+        std::vector<std::vector<std::vector<double>>> listeValMatch;
+        for(int i=0;i<rowBlocks;i++){
+            for(int j=0;j<colBlocks;j++){
+                int taille=i*rowBlocks+j;
+                for(int k=0;k<distances[taille].size();k++){
+                    std::vector<double> a{distances[taille][k],i,j};
+                    auto b=std::find(listeMatch.begin(),listeMatch.end(),bestMatches[taille][k]);
+                    if(b==listeMatch.end()){
+                        listeMatch.push_back(bestMatches[taille][k]);
+                        std::vector<std::vector<double>> c;
+                        c.push_back(a);
+                        listeValMatch.push_back(c);
+                    }else{
+                        int c=std::distance(listeMatch.begin(),b);
+                        listeValMatch[c].push_back(a);
+                    }
                 }
             }
 
-            cv::Mat bestMatchImg = cv::imread(bestMatch);
-
-            // resize de l'imagette pour qu'elle corresponde à la taille du bloc
-            cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
-
-
-            bestMatchImg.copyTo(mosaic(roi));
-
-            // remove used image from the map
-            if (!params.reuseImages) meanValues.erase(bestMatch);
+        }
+        std::vector<std::string> imageUsed;
+        std::vector<std::vector<std::string>> imageFinale;
+        std::vector<std::vector<bool>> blockBool;
+        for (int i = 0; i < rowBlocks; i++)
+        {
+            blockBool.push_back(std::vector<bool>());
+            imageFinale.push_back(std::vector<std::string>());
+            for (int j = 0; j < colBlocks; j++)
+            {
+                blockBool[i].push_back(false);
+                imageFinale[i].push_back("");
+            }
+        }
+        while(imageUsed.size()<distances.size()){
+            for(int i=0;i<rowBlocks;i++){
+                for(int j=0;j<colBlocks;j++){
+                    if(blockBool[i][j]==false){
+                        int k=0;
+                        while(std::find(imageUsed.begin(),imageUsed.end(),bestMatches[i*rowBlocks+j][k])!=imageUsed.end()){
+                            k++;
+                        }
+                        std::string bestMatch=bestMatches[i*rowBlocks+j][k];
+                        auto a=std::find(listeMatch.begin(),listeMatch.end(),bestMatch);
+                        int l=std::distance(listeMatch.begin(),a);
+                        bool boo=true;
+                        for(int m=0;m<listeValMatch[l].size();m++){
+                            if(blockBool[listeValMatch[l][m][1]][listeValMatch[l][m][2]]==false && listeValMatch[l][m][1]*rowBlocks+listeValMatch[l][m][2]!=i*rowBlocks+j){
+                                boo=false;
+                                break;
+                            }
+                            if(listeValMatch[l][m][1]*rowBlocks+listeValMatch[l][m][2]==i*rowBlocks+j){
+                                break;
+                            }
+                        }
+                        if(boo){
+                            blockBool[i][j]=true;
+                            imageUsed.push_back(bestMatch);
+                            imageFinale[i][j]=bestMatch;
+                        }
+                    }
+                }
+            }
         }
 
-        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+        for (int i = 0; i < rowBlocks; i++)
+        {
+            for (int j = 0; j < colBlocks; j++)
+            {
+                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
+                cv::Mat block = mosaic(roi).clone();
+                cv::Mat bestMatchImg = cv::imread(imageFinale[i][j]);
+                cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
+                bestMatchImg.copyTo(mosaic(roi));
+            }
+        }
+        return mosaic;
+    } else {
+        for (int i = 0; i < rowBlocks; i++)
+        {
+            for (int j = 0; j < colBlocks; j++)
+            {
+                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
+                cv::Mat block = mosaic(roi).clone();
+                StatisticalFeatures blockStats = processImageStats(block);
+                double minDistance = std::numeric_limits<double>::max();
+                std::string bestMatch;
+                for(const auto& entry : meanValues){
+                    StatisticalFeatures second = entry.second;
+                    double distance = computeDistance(blockStats, second, params);
+                    if(distance < minDistance){
+                        minDistance = distance;
+                        bestMatch = entry.first;
+                    }
+                }
+                cv::Mat bestMatchImg = cv::imread(bestMatch);
+                cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
+                bestMatchImg.copyTo(mosaic(roi));
+                //if (!params.reuseImages) meanValues.erase(bestMatch);
+            }
+            std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+        }
+        std::cout << "Progress : 100%" << std::endl;
+        return mosaic;
     }
-    std::cout << "Progress : 100%" << std::endl;
     return mosaic;
 }
 
@@ -481,6 +624,19 @@ float PSNR(const cv::Mat& I1, const cv::Mat& I2)
     }
 }
 
+cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
+    int height = img.rows;
+    int width = img.cols;
+
+    int heightToRemove = height % blockSize;
+    int widthToRemove = width % blockSize;
+
+    cv::Rect roi(0, 0, width - widthToRemove, height - heightToRemove);
+    cv::Mat result = img(roi).clone();
+
+    return result;
+}
+
 int main(int argc, char** argv )
 {
     if ( argc < 4 || argc > 5 )
@@ -500,7 +656,7 @@ int main(int argc, char** argv )
 
     if (inputImage.size().width % blockSize != 0 || inputImage.size().height % blockSize != 0){
         std::cout << "La taille de l'image n'est pas un multiple de la taille du bloc : " << blockSize << ", taille de l'image : " << inputImage.size() << std::endl;
-        return -1;
+        inputImage = fitBlocks(inputImage, blockSize);
     }
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
@@ -518,15 +674,15 @@ int main(int argc, char** argv )
         params.reuseImages = false;
     }*/
 
-    //cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
-    cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2], params);
+    cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
+    //cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2], params);
 
     float psnr = PSNR(inputImage, mosaic);
     std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
 
-    cv::namedWindow("Mosaïque", cv::WINDOW_AUTOSIZE);
-    cv::imshow("Mosaïque", mosaic);
-    cv::waitKey(0);
+    // cv::namedWindow("Mosaïque", cv::WINDOW_AUTOSIZE);
+    // cv::imshow("Mosaïque", mosaic);
+    // cv::waitKey(0);
 
     cv::imwrite("mosaic_output.jpg", mosaic);
     return 0;
