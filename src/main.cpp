@@ -55,7 +55,7 @@ struct Tamura{
  */
 struct GenerateMosaicParams{
     bool meanColor = true;
-    bool variance = false;
+    bool variance = true;
     bool skewness = false;
     bool energy = false;
     bool reuseImages = false;
@@ -69,7 +69,7 @@ struct GenerateMosaicParams{
      * @param energy 
      * @param reuseImages 
      */
-    GenerateMosaicParams(bool meanColor = true, bool variance = false, bool skewness = false, bool energy = false, bool reuseImages = false) : meanColor(meanColor), variance(variance), skewness(skewness), energy(energy), reuseImages(reuseImages) {}
+    GenerateMosaicParams(bool meanColor = true, bool variance = true, bool skewness = false, bool energy = false, bool reuseImages = false) : meanColor(meanColor), variance(variance), skewness(skewness), energy(energy), reuseImages(reuseImages) {}
     
     void setFromBitArray(const std::string& bitArray){
         meanColor = bitArray[0] == '1';
@@ -464,7 +464,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
                 cv::Mat bestMatchImg = cv::imread(bestMatch);
                 cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
                 bestMatchImg.copyTo(mosaic(roi));
-                //if (!params.reuseImages) meanValues.erase(bestMatch);
+                if (!params.reuseImages) meanValues.erase(bestMatch);
             }
             std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
         }
@@ -668,7 +668,7 @@ int main(int argc, char** argv )
         params.setFromBitArray(argv[4]);
     }/* else { // Example, this specific example is unnecessary because of the default constructor
         params.meanColor = true;
-        params.variance = false;
+        params.variance = true;
         params.skewness = false;
         params.energy = false;
         params.reuseImages = false;
