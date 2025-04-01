@@ -366,6 +366,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
             std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
         }
         std::cout << "Progress : 100%" << std::endl;
+        // Lister la meilleur imagette pour chaque bloc
         std::vector<std::string> listeMatch;
         std::vector<std::vector<std::vector<double>>> listeValMatch;
         for(int i=0;i<rowBlocks;i++){
@@ -387,6 +388,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
             }
 
         }
+        // Pour chaque bloc, est ce que la meilleure imagette de chjaque bloc est la valeur minimale ? si oui on lui donne et on l'enleve
         std::vector<std::string> imageUsed;
         std::vector<std::vector<std::string>> imageFinale;
         std::vector<std::vector<bool>> blockBool;
