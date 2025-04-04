@@ -476,96 +476,41 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
     return mosaic;
 }
 
-int alignmentScore(std::string &a, std::string &b){
-    // compute the alignment matrix between a and b
+int alignmentScore(const std::string &a, const std::string &b) {
+    // Compute the alignment matrix between a and b
     int n = a.size();
     int m = b.size();
-    std::string* longest = n > m ? &a : &b;
-    std::string* shortest = n > m ? &b : &a;
-    std::string editableShortest = *shortest;
-    std::string editableLongest = *longest;
-    
 
     // Needleman–Wunsch algorithm
-    int** score = new int*[n+1];
+    int **score = new int *[n + 1];
     int match = 1;
     int mismatch = -1;
     int gap = -1;
-    std::map<std::pair<int, int>, std::pair<int, int>> backtrack;
 
-    for (int i = 0; i <= n; i++){
-        score[i] = new int[m+1];
+    for (int i = 0; i <= n; i++) {
+        score[i] = new int[m + 1];
         score[i][0] = i * gap;
     }
-    for (int j = 0; j <= m; j++){
+    for (int j = 0; j <= m; j++) {
         score[0][j] = j * gap;
     }
-    for (int i = 1; i <= n; i++){
-        for (int j = 1; j <= m; j++){
-            int diag = score[i-1][j-1] + (a[i-1] == b[j-1] ? match : mismatch);
-            int up = score[i-1][j] + gap;
-            int left = score[i][j-1] + gap;
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= m; j++) {
+            int diag = score[i - 1][j - 1] + (a[i - 1] == b[j - 1] ? match : mismatch);
+            int up = score[i - 1][j] + gap;
+            int left = score[i][j - 1] + gap;
             score[i][j] = std::max({diag, up, left});
-            if (score[i][j] == diag){
-                backtrack[{i,j}] = {i-1, j-1};
-            } else if (score[i][j] == up){
-                backtrack[{i,j}] = {i-1, j};
-            } else {
-                backtrack[{i,j}] = {i, j-1};
-            }
         }
     }
-    int i = n;
-    int j = m;
-    std::string alignedA = "";
-    std::string alignedB = "";
-    while (i > 0 || j > 0){
-        if (backtrack.find({i,j}) != backtrack.end()){
-            auto [prevI, prevJ] = backtrack[{i,j}];
-            if (prevI == i-1 && prevJ == j-1){
-                alignedA += a[i-1];
-                alignedB += b[j-1];
-            } else if (prevI == i-1 && prevJ == j){
-                alignedA += a[i-1];
-                alignedB += '-';
-            } else {
-                alignedA += '-';
-                alignedB += b[j-1];
-            }
-            i = prevI;
-            j = prevJ;
-        } else {
-            if (i > 0){
-                alignedA += a[i-1];
-                alignedB += '-';
-                i--;
-            } else {
-                alignedA += '-';
-                alignedB += b[j-1];
-                j--;
-            }
-        }
-    }
-    std::reverse(alignedA.begin(), alignedA.end());
-    std::reverse(alignedB.begin(), alignedB.end());
-    int scoreValue = 0;
-    for (int i = 0; i < alignedA.size(); i++){
-        if (alignedA[i] == alignedB[i]){
-            scoreValue += match;
-        } else if (alignedA[i] == '-' || alignedB[i] == '-'){
-            scoreValue += gap;
-        } else {
-            scoreValue += mismatch;
-        }
-    }
-    // free the memory
-    for (int i = 0; i <= n; i++){
+
+    int scoreValue = score[n][m];
+
+    // Free the memory
+    for (int i = 0; i <= n; i++) {
         delete[] score[i];
     }
     delete[] score;
-    // show the alignment
-    std::cout << "Alignment A : " << alignedA << std::endl;
-    std::cout << "Alignment B : " << alignedB << std::endl;
+
     return scoreValue;
 }
 
@@ -765,9 +710,16 @@ int main(int argc, char** argv )
     // cv::waitKey(0);
 
     cv::imwrite("mosaic_output.jpg", mosaic);*/
-    std::string a = "AGACTAGTTAC";
-    std::string b = "CGAGACGT";
-    int s = alignmentScore(a, b);
+    cv::Mat img = cv::imread("./img/mosaic_output_reuse.jpg");
+    cv::Mat img2 = cv::imread("./img/rond_point.jpg");
+    //resize them to size = 8
+    cv::resize(img, img, cv::Size(8, 8));
+    cv::resize(img2, img2, cv::Size(8, 8));
+    std::string imgPixelsAsAstring = getImageAsString(img);
+    std::string img2PixelsAsAstring = getImageAsString(img2);
+    std::cout << "img : " << imgPixelsAsAstring << std::endl;
+    std::cout << "img2 : " << img2PixelsAsAstring << std::endl;
+    int s = alignmentScore(imgPixelsAsAstring, img2PixelsAsAstring);
     std::cout << "Alignment score : " << s << std::endl;
     
     return 0;
