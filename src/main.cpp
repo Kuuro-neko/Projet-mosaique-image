@@ -7,6 +7,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "includes/alignmentMosaic.hpp"
+
 using namespace cv;
 namespace fs = std::filesystem;
 
@@ -117,39 +119,6 @@ StatisticalFeatures processImageStats(const cv::Mat& img){
                     meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
     
     return {c, v, s, e};
-}
-
-std::string generateResizedDataset(const std::string& folderPath, int blocSize){
-    std::cout << "Resizing the dataset" << std::endl;
-    int progress = 0;
-    int total = std::distance(fs::directory_iterator(folderPath), fs::directory_iterator{});
-    std::string resizedFolder = folderPath;
-    if (resizedFolder.back() == '/') resizedFolder.pop_back(); // remove the last / if it exists
-    resizedFolder += "_resized_" + std::to_string(blocSize);
-    if (!fs::exists(resizedFolder)){
-        fs::create_directory(resizedFolder);
-    }
-    for (const auto& entry : fs::directory_iterator(folderPath)){
-        try {
-            // checkif the resized image already exists
-            if (fs::exists(resizedFolder + "/" + entry.path().filename().string())){
-                progress++;
-                continue;
-            }
-            cv::Mat img = cv::imread(entry.path().string());
-            cv::resize(img, img, cv::Size(blocSize, blocSize));
-            cv::imwrite(resizedFolder + "/" + entry.path().filename().string(), img);
-            progress++;
-            if (progress % 250 == 0){
-                std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
-            }
-        } catch (cv::Exception& e){
-            // There is probably a json file in the dataset folder, catching it's error here
-            std::cout << "Error while processing image : " << entry.path().string() << std::endl;
-        }
-    }
-    std::cout << "Progress : 100%" << std::endl;
-    return resizedFolder;
 }
 
 /**
@@ -474,110 +443,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
         return mosaic;
     }
     return mosaic;
-}
-
-int alignmentScore(const std::string &a, const std::string &b) {
-    // Compute the alignment matrix between a and b
-    int n = a.size();
-    int m = b.size();
-
-    // Needleman–Wunsch algorithm
-    int **score = new int *[n + 1];
-    int match = 1;
-    int mismatch = -1;
-    int gap = -1;
-
-    for (int i = 0; i <= n; i++) {
-        score[i] = new int[m + 1];
-        score[i][0] = i * gap;
-    }
-    for (int j = 0; j <= m; j++) {
-        score[0][j] = j * gap;
-    }
-    for (int i = 1; i <= n; i++) {
-        for (int j = 1; j <= m; j++) {
-            int diag = score[i - 1][j - 1] + (a[i - 1] == b[j - 1] ? match : mismatch);
-            int up = score[i - 1][j] + gap;
-            int left = score[i][j - 1] + gap;
-            score[i][j] = std::max({diag, up, left});
-        }
-    }
-
-    int scoreValue = score[n][m];
-
-    // Free the memory
-    for (int i = 0; i <= n; i++) {
-        delete[] score[i];
-    }
-    delete[] score;
-
-    return scoreValue;
-}
-
-std::string getImageAsString(const cv::Mat& img){
-    // convert the image to a string
-    std::ostringstream oss;
-    const uchar* data = img.data;
-    for (size_t i = 0; i < img.total() * img.elemSize(); ++i) {
-        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
-    }
-    return oss.str();
-}
-
-double computeAlignmentScore(const cv::Mat& block, const cv::Mat& reference){
-
-    // compute the alignment score as if the images were a big string of pixel values
-    //return alignmentScore(getImageAsString(block), getImageAsString(reference));
-    return 0.0;
-}
-
-cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, GenerateMosaicParams params){
-    std::cout << "Generating mosaic with parameters : block size : " << blockSize << ", " << params.toString() << std::endl;
-    cv::Mat mosaic = inputImage.clone();
-    std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
-
-    int rowBlocks = inputImage.rows / blockSize;
-    int colBlocks = inputImage.cols / blockSize;
-
-    int totalBlocks = rowBlocks * colBlocks;
-
-    std::string resizedFolder = generateResizedDataset(folderPath, blockSize);
-    std::cout << "Resized folder : " << resizedFolder << std::endl;
-    for (int i = 0; i < rowBlocks; i++)
-    {
-        for (int j = 0; j < colBlocks; j++)
-        {
-            
-            cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-            cv::Mat block = mosaic(roi).clone();
-
-            double maxScore = 0;
-            std::string bestMatch;
-
-            for(const auto& entry : fs::directory_iterator(resizedFolder)){
-                cv::Mat reference = cv::imread(entry.path().string());
-                double score = computeAlignmentScore(block, reference);
-
-                if(score > maxScore){
-                    maxScore = score;
-                    bestMatch = entry.path().string();
-                }
-            }
-
-            cv::Mat bestMatchImg = cv::imread(bestMatch);
-
-            // resize de l'imagette pour qu'elle corresponde à la taille du bloc
-            cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
-
-            bestMatchImg.copyTo(mosaic(roi));
-        }
-
-        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
-    }
-    std::cout << "Progress : 100%" << std::endl;
-    return mosaic;
-}
-          
+}          
 
 /**
  * @brief Précalcul des statistiques des images du dataset si elles n'ont pas déjà été calculées
@@ -664,7 +530,7 @@ cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
 
 int main(int argc, char** argv )
 {
-    /*if ( argc < 4 || argc > 5 )
+    if ( argc < 4 || argc > 5 )
     {
         printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size> [parameters as bit array]\n", argv[0]);
         std::cout << "Parameters : meanColor, variance, skewness, energy, reuseImages. Ex : 10101" << std::endl;
@@ -686,7 +552,7 @@ int main(int argc, char** argv )
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
 
-    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
+    //std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
 
     GenerateMosaicParams params;
     if (argc == 5){
@@ -700,7 +566,7 @@ int main(int argc, char** argv )
     }*/
 
     //cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
-    /*cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2], params);
+    cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2]);
 
     float psnr = PSNR(inputImage, mosaic);
     std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
@@ -709,8 +575,9 @@ int main(int argc, char** argv )
     // cv::imshow("Mosaïque", mosaic);
     // cv::waitKey(0);
 
-    cv::imwrite("mosaic_output.jpg", mosaic);*/
-    cv::Mat img = cv::imread("./img/mosaic_output_reuse.jpg");
+    cv::imwrite("mosaic_output.jpg", mosaic);
+
+    /*cv::Mat img = cv::imread("./img/mosaic_output_reuse.jpg");
     cv::Mat img2 = cv::imread("./img/rond_point.jpg");
     //resize them to size = 8
     cv::resize(img, img, cv::Size(8, 8));
@@ -720,7 +587,7 @@ int main(int argc, char** argv )
     std::cout << "img : " << imgPixelsAsAstring << std::endl;
     std::cout << "img2 : " << img2PixelsAsAstring << std::endl;
     int s = alignmentScore(imgPixelsAsAstring, img2PixelsAsAstring);
-    std::cout << "Alignment score : " << s << std::endl;
+    std::cout << "Alignment score : " << s << std::endl;*/
     
     return 0;
 }
