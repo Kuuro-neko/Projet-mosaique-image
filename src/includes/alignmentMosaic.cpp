@@ -185,5 +185,11 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
         std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
     }
     std::cout << "Progress : 100%" << std::endl;
+
+    for (int i = 0; i <= blockSize*6; i++) {
+        delete[] scoreTab[i];
+    }
+    delete[] scoreTab;
+
     return mosaic;
 }
