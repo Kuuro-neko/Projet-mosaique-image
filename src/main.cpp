@@ -435,7 +435,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
                 cv::Mat bestMatchImg = cv::imread(bestMatch);
                 cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
                 bestMatchImg.copyTo(mosaic(roi));
-                if (!params.reuseImages) meanValues.erase(bestMatch);
+                meanValues.erase(bestMatch);
             }
             std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
         }
@@ -530,11 +530,16 @@ cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
 
 int main(int argc, char** argv )
 {
-    if ( argc < 4 || argc > 5 )
+    if ( argc < 4 || argc > 6 )
     {
-        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size> [parameters as bit array]\n", argv[0]);
+        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size> [method] [parameters as bit array]\n", argv[0]);
+        std::cout << "Method : 0 = statistics, 1 = alignment" << std::endl;
         std::cout << "Parameters : meanColor, variance, skewness, energy, reuseImages. Ex : 10101" << std::endl;
         return -1;
+    }
+    int method = 0;
+    if (argc > 4){
+        method = std::stoi(argv[4]);
     }
 
     cv::Mat inputImage = cv::imread(argv[1], cv::IMREAD_COLOR);
@@ -552,21 +557,24 @@ int main(int argc, char** argv )
 
     std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
 
-    //std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
+    cv::Mat mosaic;
+    if (method == 0){
+        std::cout << "Using statistics method" << std::endl;
+        std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
+        GenerateMosaicParams params;
+        if (argc == 6){
+            std::string bitArray = argv[5];
+            params.setFromBitArray(bitArray);
+        }
+        std::cout << "Parameters : " << params.toString() << std::endl;
 
-    GenerateMosaicParams params;
-    if (argc == 5){
-        params.setFromBitArray(argv[4]);
-    }/* else { // Example, this specific example is unnecessary because of the default constructor
-        params.meanColor = true;
-        params.variance = true;
-        params.skewness = false;
-        params.energy = false;
-        params.reuseImages = false;
-    }*/
+        mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
 
-    //cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
-    cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2]);
+    } else if (method == 1){
+        std::cout << "Using alignment method" << std::endl;
+        mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2]);
+    }
+
 
     float psnr = PSNR(inputImage, mosaic);
     std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
