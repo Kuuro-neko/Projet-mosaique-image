@@ -6,6 +6,9 @@
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 
+#include <future>
+#include <mutex>
+
 namespace fs = std::filesystem;
 
 /**

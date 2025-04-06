@@ -1,19 +1,35 @@
 #include "../includes/alignmentMosaic.hpp"
 #include <algorithm>
 
-int alignmentScoreEfficient(const std::string &a, const std::string &b, int match, int mismatch, int gap, int n, int **score) {
+/**
+ * @brief Compute the alignment score of two images row using the Needleman-Wunsch algorithm
+ * 
+ * @param a 
+ * @param b 
+ * @param n Size of the pixel strings
+ * @param score Array of size [n+1][n+1] to store the scores. Memory is managed outside to allow reuse
+ * @return int 
+ */
+int alignmentScore(const std::string &a, const std::string &b, int n, int **score) {
     // Needleman–Wunsch algorithm
     for (int i = 0; i <= n; i++) {
-        score[i][0] = i * gap;
+        score[i][0] = i * (-30);
     }
     for (int j = 0; j <= n; j++) {
-        score[0][j] = j * gap;
+        score[0][j] = j * (-30);
     }
+    int diag, up, left, aR, aG, aB, bR, bG, bB;
     for (int i = 1; i <= n; i++) {
         for (int j = 1; j <= n; j++) {
-            int diag = score[i - 1][j - 1] + (a[i - 1] == b[j - 1] ? match : mismatch);
-            int up = score[i - 1][j] + gap;
-            int left = score[i][j - 1] + gap;
+            aR = std::stoi(a.substr((i-1)*6, 2), nullptr, 16);
+            aG = std::stoi(a.substr((i-1)*6 + 2, 2), nullptr, 16);
+            aB = std::stoi(a.substr((i-1)*6 + 4, 2), nullptr, 16);
+            bR = std::stoi(b.substr((j-1)*6, 2), nullptr, 16);
+            bG = std::stoi(b.substr((j-1)*6 + 2, 2), nullptr, 16);
+            bB = std::stoi(b.substr((j-1)*6 + 4, 2), nullptr, 16);
+            diag = score[i - 1][j - 1] - ((std::abs(aR - bR) + std::abs(aG - bG) + std::abs(aB - bB)));
+            up = score[i - 1][j] - 30;
+            left = score[i][j - 1] - 30;
             score[i][j] = std::max({diag, up, left});
         }
     }
@@ -21,10 +37,19 @@ int alignmentScoreEfficient(const std::string &a, const std::string &b, int matc
     return scoreValue;
 }
 
-int alignmentScoreRowByRowEfficient(const std::vector<std::string> &a, const std::vector<std::string> &b, int match, int mismatch, int gap, int n, int **score) {
+/**
+ * @brief Compute the alignment score of two images using the Needleman-Wunsch algorithm
+ * 
+ * @param a 
+ * @param b 
+ * @param n Size of the pixel strings
+ * @param score Array of size [n+1][n+1] to store the scores. Memory is managed outside to allow reuse
+ * @return int 
+ */
+int alignmentScoreRowByRow(const std::vector<std::string> &a, const std::vector<std::string> &b, int n, int **score) {
     int out = 0;
     for (int i = 0; i < a.size(); i++) {
-        out += alignmentScoreEfficient(a[i], b[i], match, mismatch, gap, n, score);
+        out += alignmentScore(a[i], b[i], n, score);
     }
     return out;
 }
@@ -76,7 +101,7 @@ std::string generatePrecomputedStringsRows(const std::string& folderPath, int bl
                 std::cout << "Error while reading image : " << entry.path().string() << std::endl;
                 continue;
             }
-            cv::resize(img, img, cv::Size(blocksize, blocksize));
+            cv::resize(img, img, cv::Size(blocksize, blocksize), cv::INTER_LINEAR);
             std::vector<std::string> rows = getImageRowsAsString(img);
             for (const auto& row : rows){
                 file << row << " ";
@@ -139,9 +164,6 @@ std::string assembleStringsRows(const std::vector<std::string>& strings){
     return oss.str();
 }
 
-#include <future>
-#include <mutex>
-
 cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, bool uniquesImagettes){
     std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << ", uniquesImagettes : " << uniquesImagettes << " ====" << std::endl;
     cv::Mat mosaic = inputImage.clone();
@@ -150,7 +172,7 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
     int colBlocks = inputImage.cols / blockSize;
     int totalBlocks = rowBlocks * colBlocks;
 
-    std::string precomputedStringsFile = generatePrecomputedStringsRows(folderPath, blockSize, 1000);
+    std::string precomputedStringsFile = generatePrecomputedStringsRows(folderPath, blockSize, 10000);
     std::cout << "Precomputed strings file : " << precomputedStringsFile << std::endl;
 
     std::vector<std::vector<std::string>> precomputedStringsRows = loadPrecomputedStringsRows(precomputedStringsFile);
@@ -165,12 +187,10 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
         cv::Mat block = inputImage(roi).clone();
 
         std::vector<std::string> inputBlocStringsRows = getImageRowsAsString(block);
-        int rowLength = inputBlocStringsRows[0].length();
 
-        // Allocate score table per thread
-        int **scoreTab = new int *[blockSize*6 + 1];
-        for (int x = 0; x <= blockSize*6; x++) {
-            scoreTab[x] = new int[blockSize*6 + 1];
+        int **scoreTab = new int *[blockSize + 1];
+        for (int x = 0; x <= blockSize; x++) {
+            scoreTab[x] = new int[blockSize + 1];
             scoreTab[x][0] = x * -1;
         }
 
@@ -178,18 +198,18 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
         std::vector<std::string>* bestMatch = nullptr;
 
         for (auto& precomputedStringsRow : precomputedStringsRows) {
-            int score = alignmentScoreRowByRowEfficient(precomputedStringsRow, inputBlocStringsRows, 1, -1, -1, rowLength, scoreTab);
+            int score = alignmentScoreRowByRow(precomputedStringsRow, inputBlocStringsRows, blockSize, scoreTab);
             if (score > maxScore) {
                 maxScore = score;
                 bestMatch = &precomputedStringsRow;
             }
         }
 
-        for (int x = 0; x <= blockSize*6; x++) delete[] scoreTab[x];
+        for (int x = 0; x <= blockSize; x++) delete[] scoreTab[x];
         delete[] scoreTab;
 
-        if (bestMatch) {
-            cv::Mat bestMatchImg = loadImageFromHexString(assembleStringsRows(*bestMatch), blockSize, blockSize);
+        cv::Mat bestMatchImg = loadImageFromHexString(assembleStringsRows(*bestMatch), blockSize, blockSize);
+        {
             std::lock_guard<std::mutex> lock(mosaicMutex);
             bestMatchImg.copyTo(mosaic(roi));
         }
