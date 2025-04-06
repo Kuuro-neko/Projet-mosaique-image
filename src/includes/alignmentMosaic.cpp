@@ -155,16 +155,14 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
 
     std::vector<std::vector<std::string>> precomputedStringsRows = loadPrecomputedStringsRows(precomputedStringsFile);
 
-    std::atomic<int> processedBlocks = 0;
     std::mutex mosaicMutex;
+
+    time_t startTime = time(nullptr);
+    std::cout << "Starting to generate the mosaic " << ctime(&startTime) << std::endl;
 
     auto processBlock = [&](int i, int j) {
         cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-        cv::Mat block;
-        {
-            std::lock_guard<std::mutex> lock(mosaicMutex);
-            block = mosaic(roi).clone();
-        }
+        cv::Mat block = inputImage(roi).clone();
 
         std::vector<std::string> inputBlocStringsRows = getImageRowsAsString(block);
         int rowLength = inputBlocStringsRows[0].length();
@@ -195,10 +193,6 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
             std::lock_guard<std::mutex> lock(mosaicMutex);
             bestMatchImg.copyTo(mosaic(roi));
         }
-
-        int currentProgress = processedBlocks.fetch_add(1) + 1;
-        if (currentProgress % (colBlocks) == 0 || currentProgress == totalBlocks)
-            std::cout << "Progress : " << int(currentProgress / (float)totalBlocks * 100) << "%" << std::flush << "\r";
     };
 
     // Launch tasks in parallel
@@ -211,6 +205,8 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
 
     for (auto& f : futures) f.get(); // Wait for all
 
-    std::cout << "Progress : 100%" << std::endl;
+    time_t endTime = time(nullptr);
+
+    std::cout << "Done in " << difftime(endTime, startTime) << " seconds" << std::endl;
     return mosaic;
 }
