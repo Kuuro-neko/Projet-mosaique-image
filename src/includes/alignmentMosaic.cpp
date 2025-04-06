@@ -121,6 +121,7 @@ std::vector<std::vector<std::string>> loadPrecomputedStringsRows(const std::stri
 cv::Mat loadImageFromHexString(const std::string& hexString, int rows, int cols){
     cv::Mat img(rows, cols, CV_8UC3);
     for (size_t i = 0; i < hexString.length(); i += 6) {
+        if (i + 6 > hexString.size()) break;
         std::string hexValue = hexString.substr(i, 6);
         int r = std::stoi(hexValue.substr(0, 2), nullptr, 16);
         int g = std::stoi(hexValue.substr(2, 2), nullptr, 16);
@@ -138,58 +139,78 @@ std::string assembleStringsRows(const std::vector<std::string>& strings){
     return oss.str();
 }
 
+#include <future>
+#include <mutex>
+
 cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, bool uniquesImagettes){
     std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << ", uniquesImagettes : " << uniquesImagettes << " ====" << std::endl;
     cv::Mat mosaic = inputImage.clone();
 
     int rowBlocks = inputImage.rows / blockSize;
     int colBlocks = inputImage.cols / blockSize;
-
     int totalBlocks = rowBlocks * colBlocks;
 
     std::string precomputedStringsFile = generatePrecomputedStringsRows(folderPath, blockSize, 1000);
     std::cout << "Precomputed strings file : " << precomputedStringsFile << std::endl;
 
     std::vector<std::vector<std::string>> precomputedStringsRows = loadPrecomputedStringsRows(precomputedStringsFile);
-    std::vector<std::string> inputBlocStringsRows;
 
-    int **scoreTab = new int *[blockSize*6 + 1];
-    for (int i = 0; i <= blockSize*6; i++) {
-        scoreTab[i] = new int[blockSize*6 + 1];
-        scoreTab[i][0] = i * -1;
-    }
-    std::cout << "Progress : " << int(0 / (float)totalBlocks * 100) << "%" << std::flush << "\r";
-    for (int i = 0; i < rowBlocks; i++)
-    {
-        for (int j = 0; j < colBlocks; j++)
+    std::atomic<int> processedBlocks = 0;
+    std::mutex mosaicMutex;
+
+    auto processBlock = [&](int i, int j) {
+        cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
+        cv::Mat block;
         {
-            cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-            cv::Mat block = mosaic(roi).clone();
-            inputBlocStringsRows = getImageRowsAsString(block);
-            int rowLength = inputBlocStringsRows[0].length();
+            std::lock_guard<std::mutex> lock(mosaicMutex);
+            block = mosaic(roi).clone();
+        }
 
-            int maxScore = std::numeric_limits<int>::min();
-            std::vector<std::string>* bestMatch;
+        std::vector<std::string> inputBlocStringsRows = getImageRowsAsString(block);
+        int rowLength = inputBlocStringsRows[0].length();
 
-            for(auto& precomputedStringsRow : precomputedStringsRows) {
-                int score = alignmentScoreRowByRowEfficient(precomputedStringsRow, inputBlocStringsRows, 1, -1, -1, rowLength, scoreTab);
-                if (score > maxScore) {
-                    maxScore = score;
-                    bestMatch = &precomputedStringsRow;
-                }
+        // Allocate score table per thread
+        int **scoreTab = new int *[blockSize*6 + 1];
+        for (int x = 0; x <= blockSize*6; x++) {
+            scoreTab[x] = new int[blockSize*6 + 1];
+            scoreTab[x][0] = x * -1;
+        }
+
+        int maxScore = std::numeric_limits<int>::min();
+        std::vector<std::string>* bestMatch = nullptr;
+
+        for (auto& precomputedStringsRow : precomputedStringsRows) {
+            int score = alignmentScoreRowByRowEfficient(precomputedStringsRow, inputBlocStringsRows, 1, -1, -1, rowLength, scoreTab);
+            if (score > maxScore) {
+                maxScore = score;
+                bestMatch = &precomputedStringsRow;
             }
+        }
+
+        for (int x = 0; x <= blockSize*6; x++) delete[] scoreTab[x];
+        delete[] scoreTab;
+
+        if (bestMatch) {
             cv::Mat bestMatchImg = loadImageFromHexString(assembleStringsRows(*bestMatch), blockSize, blockSize);
+            std::lock_guard<std::mutex> lock(mosaicMutex);
             bestMatchImg.copyTo(mosaic(roi));
         }
 
-        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+        int currentProgress = processedBlocks.fetch_add(1) + 1;
+        if (currentProgress % (colBlocks) == 0 || currentProgress == totalBlocks)
+            std::cout << "Progress : " << int(currentProgress / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+    };
+
+    // Launch tasks in parallel
+    std::vector<std::future<void>> futures;
+    for (int i = 0; i < rowBlocks; ++i) {
+        for (int j = 0; j < colBlocks; ++j) {
+            futures.push_back(std::async(std::launch::async, processBlock, i, j));
+        }
     }
+
+    for (auto& f : futures) f.get(); // Wait for all
+
     std::cout << "Progress : 100%" << std::endl;
-
-    for (int i = 0; i <= blockSize*6; i++) {
-        delete[] scoreTab[i];
-    }
-    delete[] scoreTab;
-
     return mosaic;
 }
