@@ -37,6 +37,33 @@ int alignmentScore(const std::string &a, const std::string &b, int n, int **scor
     return scoreValue;
 }
 
+int alignmentScore(const cv::Mat &a, const cv::Mat &b, int n, int **score) {
+    // Needleman–Wunsch algorithm
+    for (int i = 0; i <= n; i++) {
+        score[i][0] = i * (-30);
+    }
+    for (int j = 0; j <= n; j++) {
+        score[0][j] = j * (-30);
+    }
+    int diag, up, left, aR, aG, aB, bR, bG, bB;
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= n; j++) {
+            aR = a.at<cv::Vec3b>(i - 1)[0];
+            aG = a.at<cv::Vec3b>(i - 1)[1];
+            aB = a.at<cv::Vec3b>(i - 1)[2];
+            bR = b.at<cv::Vec3b>(j - 1)[0];
+            bG = b.at<cv::Vec3b>(j - 1)[1];
+            bB = b.at<cv::Vec3b>(j - 1)[2];
+            diag = score[i - 1][j - 1] - ((std::abs(aR - bR) + std::abs(aG - bG) + std::abs(aB - bB)));
+            up = score[i - 1][j] - 30;
+            left = score[i][j - 1] - 30;
+            score[i][j] = std::max({diag, up, left});
+        }
+    }
+    int scoreValue = score[n][n];
+    return scoreValue;
+}
+
 /**
  * @brief Compute the alignment score of two images using the Needleman-Wunsch algorithm
  * 
@@ -50,6 +77,14 @@ int alignmentScoreRowByRow(const std::vector<std::string> &a, const std::vector<
     int out = 0;
     for (int i = 0; i < a.size(); i++) {
         out += alignmentScore(a[i], b[i], n, score);
+    }
+    return out;
+}
+
+int alignmentScoreRowByRow(const cv::Mat &a, const cv::Mat &b, int n, int **score) {
+    int out = 0;
+    for (int i = 0; i < a.rows; i++) {
+        out += alignmentScore(a.row(i), b.row(i), n, score);
     }
     return out;
 }
@@ -176,6 +211,12 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
     std::cout << "Precomputed strings file : " << precomputedStringsFile << std::endl;
 
     std::vector<std::vector<std::string>> precomputedStringsRows = loadPrecomputedStringsRows(precomputedStringsFile);
+    std::vector<cv::Mat> precomputedImages;
+    for (const auto& row : precomputedStringsRows){
+        std::string hexString = assembleStringsRows(row);
+        cv::Mat img = loadImageFromHexString(hexString, blockSize, blockSize);
+        precomputedImages.push_back(img);
+    }
 
     std::mutex mosaicMutex;
 
@@ -195,20 +236,20 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
         }
 
         int maxScore = std::numeric_limits<int>::min();
-        std::vector<std::string>* bestMatch = nullptr;
+        cv::Mat *bestMatch = nullptr;
 
-        for (auto& precomputedStringsRow : precomputedStringsRows) {
-            int score = alignmentScoreRowByRow(precomputedStringsRow, inputBlocStringsRows, blockSize, scoreTab);
+        for (auto& img : precomputedImages) {
+            int score = alignmentScoreRowByRow(img, block, blockSize, scoreTab);
             if (score > maxScore) {
                 maxScore = score;
-                bestMatch = &precomputedStringsRow;
+                bestMatch = &img;
             }
         }
 
         for (int x = 0; x <= blockSize; x++) delete[] scoreTab[x];
         delete[] scoreTab;
 
-        cv::Mat bestMatchImg = loadImageFromHexString(assembleStringsRows(*bestMatch), blockSize, blockSize);
+        cv::Mat bestMatchImg = *bestMatch;
         {
             std::lock_guard<std::mutex> lock(mosaicMutex);
             bestMatchImg.copyTo(mosaic(roi));
