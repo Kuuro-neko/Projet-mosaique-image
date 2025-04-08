@@ -157,27 +157,6 @@ std::string generatePrecomputedStringsRows(const std::string& folderPath, int bl
     return precomputedStringsFile;
 }
 
-std::vector<std::vector<std::string>> loadPrecomputedStringsRows(const std::string& precomputedStringsFile){
-    std::vector<std::vector<std::string>> precomputedStringsRows;
-    std::ifstream file(precomputedStringsFile);
-    if (!file.is_open()) {
-        std::cerr << "Error opening file: " << precomputedStringsFile << std::endl;
-        return precomputedStringsRows;
-    }
-    std::string line;
-    while (std::getline(file, line)) {
-        std::istringstream iss(line);
-        std::vector<std::string> row;
-        std::string value;
-        while (iss >> value) {
-            row.push_back(value);
-        }
-        precomputedStringsRows.push_back(row);
-    }
-    file.close();
-    return precomputedStringsRows;
-}
-
 cv::Mat loadImageFromHexString(const std::string& hexString, int rows, int cols){
     cv::Mat img(rows, cols, CV_8UC3);
     for (size_t i = 0; i < hexString.length(); i += 6) {
@@ -199,6 +178,27 @@ std::string assembleStringsRows(const std::vector<std::string>& strings){
     return oss.str();
 }
 
+std::vector<cv::Mat> loadPrecomputedImages(const std::string& precomputedStringsFile, int size){
+    std::vector<cv::Mat> precomputedImages;
+    std::ifstream file(precomputedStringsFile);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << precomputedStringsFile << std::endl;
+        return precomputedImages;
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::vector<std::string> row;
+        std::string value;
+        while (iss >> value) {
+            row.push_back(value);
+        }
+        precomputedImages.push_back(loadImageFromHexString(assembleStringsRows(row), size, size));
+    }
+    file.close();
+    return precomputedImages;
+}
+
 cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, bool uniquesImagettes){
     std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << ", uniquesImagettes : " << uniquesImagettes << " ====" << std::endl;
     cv::Mat mosaic = inputImage.clone();
@@ -209,15 +209,8 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
 
     std::string precomputedStringsFile = generatePrecomputedStringsRows(folderPath, blockSize, 10000);
     std::cout << "Precomputed strings file : " << precomputedStringsFile << std::endl;
-
-    std::vector<std::vector<std::string>> precomputedStringsRows = loadPrecomputedStringsRows(precomputedStringsFile);
-    std::vector<cv::Mat> precomputedImages;
-    for (const auto& row : precomputedStringsRows){
-        std::string hexString = assembleStringsRows(row);
-        cv::Mat img = loadImageFromHexString(hexString, blockSize, blockSize);
-        precomputedImages.push_back(img);
-    }
-
+    std::vector<cv::Mat> precomputedImages = loadPrecomputedImages(precomputedStringsFile, blockSize);
+    std::cout << "Loaded " << precomputedImages.size() << " precomputed images" << std::endl;
     std::mutex mosaicMutex;
 
     time_t startTime = time(nullptr);
