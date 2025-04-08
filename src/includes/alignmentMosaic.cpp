@@ -199,8 +199,8 @@ std::vector<cv::Mat> loadPrecomputedImages(const std::string& precomputedStrings
     return precomputedImages;
 }
 
-cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, bool uniquesImagettes){
-    std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << ", uniquesImagettes : " << uniquesImagettes << " ====" << std::endl;
+cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath){
+    std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << " ====" << std::endl;
     cv::Mat mosaic = inputImage.clone();
 
     int rowBlocks = inputImage.rows / blockSize;
@@ -262,6 +262,72 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
     }
 
     for (auto& f : futures) f.get(); // Wait for all
+
+    time_t endTime = time(nullptr);
+
+    std::cout << "Done in " << difftime(endTime, startTime) << " seconds" << std::endl;
+    return mosaic;
+}
+
+cv::Mat generateMosaicUsingAlignmentSingleThread(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, bool uniquesImagettes){
+    std::cout << "==== Generating mosaic using alignment method, block size : " << blockSize << ", uniquesImagettes : " << uniquesImagettes << " ====" << std::endl;
+    cv::Mat mosaic = inputImage.clone();
+
+    int rowBlocks = inputImage.rows / blockSize;
+    int colBlocks = inputImage.cols / blockSize;
+    int totalBlocks = rowBlocks * colBlocks;
+
+    std::string precomputedStringsFile = generatePrecomputedStringsRows(folderPath, blockSize, 10000);
+    std::cout << "Precomputed strings file : " << precomputedStringsFile << std::endl;
+    std::vector<cv::Mat> precomputedImages = loadPrecomputedImages(precomputedStringsFile, blockSize);
+    std::cout << "Loaded " << precomputedImages.size() << " precomputed images" << std::endl;
+
+    time_t startTime = time(nullptr);
+    std::cout << "Starting to generate the mosaic " << ctime(&startTime) << std::endl;
+
+    
+    for (int i = 0; i < rowBlocks; ++i) {
+        for (int j = 0; j < colBlocks; ++j) {
+            cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
+            cv::Mat block = inputImage(roi).clone();
+
+            std::vector<std::string> inputBlocStringsRows = getImageRowsAsString(block);
+
+            thread_local std::vector<std::vector<int>> scoreTab;
+            if (scoreTab.size() != blockSize + 1 || scoreTab[0].size() != blockSize + 1) {
+                scoreTab.resize(blockSize + 1, std::vector<int>(blockSize + 1));
+            }
+            for (int x = 0; x <= blockSize; x++) {
+                scoreTab[x][0] = x * -1;
+            }
+
+            int* scoreTabPtr[blockSize + 1];
+            for (int x = 0; x <= blockSize; x++) {
+                scoreTabPtr[x] = scoreTab[x].data();
+            }
+
+            int maxScore = std::numeric_limits<int>::min();
+            int bestMatchIndex = -1;
+
+            for (int i = 0; i < precomputedImages.size(); ++i) {
+                int score = alignmentScoreRowByRow(precomputedImages[i], block, blockSize, scoreTabPtr);
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestMatchIndex = i;
+                }
+            }
+
+            cv::Mat bestMatchImg = precomputedImages[bestMatchIndex];
+            bestMatchImg.copyTo(mosaic(roi));
+            // remove it from the precomputed images if uniquesImagettes is true
+            if (uniquesImagettes){
+                precomputedImages.erase(precomputedImages.begin() + bestMatchIndex);
+            }
+        }
+        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
+    }
+    std::cout << "Progress : 100%" << std::endl;
+
 
     time_t endTime = time(nullptr);
 

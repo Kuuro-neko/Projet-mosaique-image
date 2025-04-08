@@ -572,7 +572,11 @@ int main(int argc, char** argv )
 
     } else if (method == 1){
         std::cout << "Using alignment method" << std::endl;
+        //multithreaded
         mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2]);
+
+        //single threaded, but allows to use unique blocks
+        //mosaic = generateMosaicUsingAlignmentSingleThread(inputImage, blockSize, argv[2], true);
     }
 
 
