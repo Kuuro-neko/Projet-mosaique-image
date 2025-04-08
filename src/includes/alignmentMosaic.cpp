@@ -222,25 +222,29 @@ cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, c
 
         std::vector<std::string> inputBlocStringsRows = getImageRowsAsString(block);
 
-        int **scoreTab = new int *[blockSize + 1];
+        thread_local std::vector<std::vector<int>> scoreTab;
+        if (scoreTab.size() != blockSize + 1 || scoreTab[0].size() != blockSize + 1) {
+            scoreTab.resize(blockSize + 1, std::vector<int>(blockSize + 1));
+        }
         for (int x = 0; x <= blockSize; x++) {
-            scoreTab[x] = new int[blockSize + 1];
             scoreTab[x][0] = x * -1;
+        }
+
+        int* scoreTabPtr[blockSize + 1];
+        for (int x = 0; x <= blockSize; x++) {
+            scoreTabPtr[x] = scoreTab[x].data();
         }
 
         int maxScore = std::numeric_limits<int>::min();
         cv::Mat *bestMatch = nullptr;
 
         for (auto& img : precomputedImages) {
-            int score = alignmentScoreRowByRow(img, block, blockSize, scoreTab);
+            int score = alignmentScoreRowByRow(img, block, blockSize, scoreTabPtr);
             if (score > maxScore) {
                 maxScore = score;
                 bestMatch = &img;
             }
         }
-
-        for (int x = 0; x <= blockSize; x++) delete[] scoreTab[x];
-        delete[] scoreTab;
 
         cv::Mat bestMatchImg = *bestMatch;
         {
