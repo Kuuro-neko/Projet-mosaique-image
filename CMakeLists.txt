@@ -1,13 +1,17 @@
-cmake_minimum_required(VERSION 2.8)
-project( ImageMosaic )
-find_package( OpenCV REQUIRED )
-include_directories( ${OpenCV_INCLUDE_DIRS} )
+cmake_minimum_required(VERSION 3.10)
+project(MosaicGenerator)
 
-set(SRC ${CMAKE_SOURCE_DIR}/src)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SOURCES
-    ${SRC}/main.cpp
+find_package(OpenCV REQUIRED)
+
+include_directories(src)
+
+add_executable(main
+    src/main.cpp
+    src/kmeans_mosaic.cpp
+    src/statistical_features.cpp
 )
 
-add_executable( main ${SOURCES} )
-target_link_libraries( main ${OpenCV_LIBS} )
+target_link_libraries(main PRIVATE ${OpenCV_LIBS})
