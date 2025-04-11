@@ -144,3 +144,5 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
  * @return float 
  */
 float PSNR(const cv::Mat& I1, const cv::Mat& I2);
+
+cv::Mat fitBlocks(const cv::Mat& img, int blockSize);

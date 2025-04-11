@@ -339,3 +339,16 @@ float PSNR(const cv::Mat& I1, const cv::Mat& I2)
         return psnr;
     }
 }
+
+cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
+    int height = img.rows;
+    int width = img.cols;
+
+    int heightToRemove = height % blockSize;
+    int widthToRemove = width % blockSize;
+
+    cv::Rect roi(0, 0, width - widthToRemove, height - heightToRemove);
+    cv::Mat result = img(roi).clone();
+
+    return result;
+}

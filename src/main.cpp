@@ -46,19 +46,6 @@ std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderP
     return tamuraValues;
 }
 
-cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
-    int height = img.rows;
-    int width = img.cols;
-
-    int heightToRemove = height % blockSize;
-    int widthToRemove = width % blockSize;
-
-    cv::Rect roi(0, 0, width - widthToRemove, height - heightToRemove);
-    cv::Mat result = img(roi).clone();
-
-    return result;
-}
-
 struct MosaicParams {
     std::string bitArray;
     std::string datasetPath;
