@@ -399,7 +399,7 @@ int main(int argc, char** argv )
     Fl_Button* buttonVoirImage = new Fl_Button(10, 425, 100, 25, "Voir image");
     buttonVoirImage->callback(fonctionVoirImage);
     Fl_Button* buttonCreerImage = new Fl_Button(250, 500, 100, 25, "Créer image");
-    MosaicParams bitArrayMap{"bitArray",argv[1],blocSize->value(),image};
+    MosaicParams bitArrayMap{"bitArray","",blocSize->value(),image};
     buttonCreerImage->callback(fonctionButtonCreerImage,&bitArrayMap);
     // fileBrowser->load("/home/thibaut/Downloads/projet_image/Projet-mosaique-image/img");
     window->end();
