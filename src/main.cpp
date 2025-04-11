@@ -328,6 +328,9 @@ void displayExistingPrecomputedDataset(Fl_Text_Buffer *buff) {
     std::cout << "Dataset path: " << line << std::endl;
     datasetFolder = line;
     buff->text(line.c_str());
+
+    datasetSize = std::distance(fs::directory_iterator(datasetFolder), fs::directory_iterator{});
+    kmeansClusterSlider->bounds(1, datasetSize);
 }
 
 int main(int argc, char** argv )
