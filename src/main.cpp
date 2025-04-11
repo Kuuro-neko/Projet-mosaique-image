@@ -15,6 +15,7 @@
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_JPEG_Image.H>
+#include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Progress.H>
 Fl_Progress* progressBar;
@@ -52,7 +53,7 @@ struct MosaicParams {
     int blockSize;
     std::string imagePath;
 };
-bool MC=false,V=false,S=false,E=false,IU=false,A=false;
+bool MC=true,V=true,S=false,E=false,IU=false,A=false;
 std::string image;
 
 void buttonParamImageMC(Fl_Widget* widget, void* data) {
@@ -129,7 +130,10 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
     cv::Mat mosaic;
     if(A){
-        mosaic=generateMosaicUsingAlignment(inputImage, param->blockSize, param->datasetPath);
+        if (IU)
+            mosaic=generateMosaicUsingAlignmentSingleThread(inputImage, param->blockSize, param->datasetPath, IU);
+        else
+            mosaic=generateMosaicUsingAlignment(inputImage, param->blockSize, param->datasetPath);
     }else{
         mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
@@ -172,10 +176,47 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
 }
 void fonctionVoirImage(Fl_Widget* widget, void* data) {
     if (image != "") {
-        Fl_JPEG_Image* imageAffiche=new Fl_JPEG_Image(image.c_str());
-        Fl_Window* window=new Fl_Window(600,600);
-        Fl_Box* box=new Fl_Box(0,0,600,600,image.c_str());
-        box->image(imageAffiche);
+        Fl_Image* original = nullptr;
+        // Detect extension (lowercase comparison)
+        std::string ext = image.substr(image.find_last_of('.') + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == "jpg" || ext == "jpeg") {
+            original = new Fl_JPEG_Image(image.c_str());
+        } else if (ext == "png") {
+            original = new Fl_PNG_Image(image.c_str());
+        } else {
+            fl_alert("Format non supporté : %s", ext.c_str());
+            return;
+        }
+
+        if (original->fail()) {
+            fl_alert("Échec du chargement de l'image !");
+            delete original;
+            return;
+        }
+
+        int ow = original->w();
+        int oh = original->h();
+
+        int maxW = 600;
+        int maxH = 600;
+
+        Fl_Image* to_display = original;
+
+        if (ow > maxW || oh > maxH) {
+            double scale = std::min((double)maxW / ow, (double)maxH / oh);
+            int nw = (int)(ow * scale);
+            int nh = (int)(oh * scale);
+
+            Fl_RGB_Image* rgb = (Fl_RGB_Image*)original->copy(nw, nh);
+            to_display = rgb;
+            delete original;
+        }
+
+        Fl_Window* window = new Fl_Window(600, 600, "Aperçu image");
+        Fl_Box* box = new Fl_Box(0, 0, 600, 600);
+        box->image(to_display);
         window->end();
         window->show();
     }
@@ -191,12 +232,12 @@ int main(int argc, char** argv )
     dispText->buffer(buffText);
     dispText->color(FL_GRAY);
     Fl_Button* buttonMeanColor = new Fl_Button(50, 50, 125, 25, "Couleur moyenne");
-    buttonMeanColor->color(FL_BLACK); 
-    buttonMeanColor->labelcolor(FL_WHITE);
+    buttonMeanColor->color(FL_WHITE); 
+    buttonMeanColor->labelcolor(FL_BLACK);
     buttonMeanColor->callback(buttonParamImageMC);
     Fl_Button* buttonVariance = new Fl_Button(237, 50, 125, 25, "Variance");
-    buttonVariance->color(FL_BLACK); 
-    buttonVariance->labelcolor(FL_WHITE);
+    buttonVariance->color(FL_WHITE); 
+    buttonVariance->labelcolor(FL_BLACK);
     buttonVariance->callback(buttonParamImageV);
     Fl_Button* buttonSkewness = new Fl_Button(425, 50, 125, 25, "Asymétrie");
     buttonSkewness->color(FL_BLACK); 
