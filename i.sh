@@ -3,4 +3,5 @@ mkdir -p build
 cd build
 cmake ..
 make
-./main "/home/thibaut/Downloads/images/train"
+cd ..
+./build/main "./dataset/train/"
