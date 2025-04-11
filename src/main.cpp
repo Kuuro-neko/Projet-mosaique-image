@@ -52,7 +52,7 @@ struct MosaicParams {
     int blockSize;
     std::string imagePath;
 };
-bool MC=false,V=false,S=false,E=false,IU=false,A=false;
+bool MC=true,V=true,S=false,E=false,IU=false,A=false;
 std::string image;
 
 void buttonParamImageMC(Fl_Widget* widget, void* data) {
@@ -191,12 +191,12 @@ int main(int argc, char** argv )
     dispText->buffer(buffText);
     dispText->color(FL_GRAY);
     Fl_Button* buttonMeanColor = new Fl_Button(50, 50, 125, 25, "Couleur moyenne");
-    buttonMeanColor->color(FL_BLACK); 
-    buttonMeanColor->labelcolor(FL_WHITE);
+    buttonMeanColor->color(FL_WHITE); 
+    buttonMeanColor->labelcolor(FL_BLACK);
     buttonMeanColor->callback(buttonParamImageMC);
     Fl_Button* buttonVariance = new Fl_Button(237, 50, 125, 25, "Variance");
-    buttonVariance->color(FL_BLACK); 
-    buttonVariance->labelcolor(FL_WHITE);
+    buttonVariance->color(FL_WHITE); 
+    buttonVariance->labelcolor(FL_BLACK);
     buttonVariance->callback(buttonParamImageV);
     Fl_Button* buttonSkewness = new Fl_Button(425, 50, 125, 25, "Asymétrie");
     buttonSkewness->color(FL_BLACK); 
