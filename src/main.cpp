@@ -15,6 +15,7 @@
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_JPEG_Image.H>
+#include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Progress.H>
 Fl_Progress* progressBar;
@@ -175,10 +176,47 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
 }
 void fonctionVoirImage(Fl_Widget* widget, void* data) {
     if (image != "") {
-        Fl_JPEG_Image* imageAffiche=new Fl_JPEG_Image(image.c_str());
-        Fl_Window* window=new Fl_Window(600,600);
-        Fl_Box* box=new Fl_Box(0,0,600,600,image.c_str());
-        box->image(imageAffiche);
+        Fl_Image* original = nullptr;
+        // Detect extension (lowercase comparison)
+        std::string ext = image.substr(image.find_last_of('.') + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == "jpg" || ext == "jpeg") {
+            original = new Fl_JPEG_Image(image.c_str());
+        } else if (ext == "png") {
+            original = new Fl_PNG_Image(image.c_str());
+        } else {
+            fl_alert("Format non supporté : %s", ext.c_str());
+            return;
+        }
+
+        if (original->fail()) {
+            fl_alert("Échec du chargement de l'image !");
+            delete original;
+            return;
+        }
+
+        int ow = original->w();
+        int oh = original->h();
+
+        int maxW = 600;
+        int maxH = 600;
+
+        Fl_Image* to_display = original;
+
+        if (ow > maxW || oh > maxH) {
+            double scale = std::min((double)maxW / ow, (double)maxH / oh);
+            int nw = (int)(ow * scale);
+            int nh = (int)(oh * scale);
+
+            Fl_RGB_Image* rgb = (Fl_RGB_Image*)original->copy(nw, nh);
+            to_display = rgb;
+            delete original;
+        }
+
+        Fl_Window* window = new Fl_Window(600, 600, "Aperçu image");
+        Fl_Box* box = new Fl_Box(0, 0, 600, 600);
+        box->image(to_display);
         window->end();
         window->show();
     }
