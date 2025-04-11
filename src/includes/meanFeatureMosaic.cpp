@@ -57,6 +57,29 @@ std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std:
         std::cout << "Loading statistical features from file" << std::endl;
         std::ifstream file(STATISTICAL_FEATURES_FILE);
         std::string line;
+        // read first line to see if it's the same folder 
+        std::getline(file, line);
+        if(line != folderPath){
+            std::cout << "Folder path does not match, preprocessing the dataset" << std::endl;
+            file.close();
+            // delete the file
+            fs::remove(STATISTICAL_FEATURES_FILE);
+
+            std::cout << "Preprocessing the dataset" << std::endl;
+            meanValues = preprocessDatasetStats(folderPath);
+        
+            // Write the data to a file
+            std::ofstream file(STATISTICAL_FEATURES_FILE);
+            // write the folderPath
+            file << folderPath << std::endl;
+            for(const auto& entry : meanValues){
+                file << entry.first << " " << entry.second.mean.r << " " << entry.second.mean.g << " " << entry.second.mean.b << " "
+                     << entry.second.variance.r << " " << entry.second.variance.g << " " << entry.second.variance.b << " "
+                     << entry.second.skewness.r << " " << entry.second.skewness.g << " " << entry.second.skewness.b << " "
+                     << entry.second.energy.r << " " << entry.second.energy.g << " " << entry.second.energy.b << std::endl;
+            }
+            file.close();
+        }
         while(std::getline(file, line)){
             std::istringstream iss(line);
             std::string key;
@@ -74,6 +97,8 @@ std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std:
     
         // Write the data to a file
         std::ofstream file(STATISTICAL_FEATURES_FILE);
+        // write the folderPath
+        file << folderPath << std::endl;
         for(const auto& entry : meanValues){
             file << entry.first << " " << entry.second.mean.r << " " << entry.second.mean.g << " " << entry.second.mean.b << " "
                  << entry.second.variance.r << " " << entry.second.variance.g << " " << entry.second.variance.b << " "
@@ -131,7 +156,7 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
     int rowBlocks = inputImage.rows / blockSize;
     int colBlocks = inputImage.cols / blockSize;
     int totalBlocks = rowBlocks * colBlocks;
-    if (params.reuseImages){
+    if (false){
         std::vector<std::vector<double>> distances;
         std::vector<std::vector<std::string>> bestMatches;
         std::cout << "Calculating distances" << std::endl;
@@ -303,7 +328,10 @@ cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, Statisti
                 cv::Mat bestMatchImg = cv::imread(bestMatch);
                 cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
                 bestMatchImg.copyTo(mosaic(roi));
-                meanValues.erase(bestMatch);
+                if (params.reuseImages) {
+                    // Remove the image from the dataset
+                    meanValues.erase(bestMatch);
+                }
             }
             std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
             progressBar->value(int((i * colBlocks) / (float)totalBlocks * 100));

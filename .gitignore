@@ -3,5 +3,6 @@ build/
 dataset/
 mean_values.txt
 mosaic_output.jpg
+mosaic_output_i.jpg
 stats_features.txt
 _precomputed_strings_[0-9]*.txt
