@@ -167,6 +167,11 @@ void buttonParamImageKmeans(Fl_Widget* widget, void* data) {
     buttonAlignement->redraw();
     Fl::check();
 }
+void kmeansClusterSliderCallback(Fl_Widget* widget, void* data) {
+    Fl_Value_Slider* slider = (Fl_Value_Slider*)widget;
+    kmeansCluster = (int)slider->value();
+    std::cout << "Kmeans cluster value: " << kmeansCluster << std::endl;
+}
 
 
 char msg[250];
@@ -181,7 +186,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
     cv::Mat mosaic;
     if(K){
-        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, 5);
+        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, kmeansCluster);
     }
     else if(A){
         if (IU)
