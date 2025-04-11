@@ -17,623 +17,316 @@
 #include <atomic>
 #include "kmeans_mosaic.hpp"
 #include "statistical_features.hpp"
+#include <FL/Fl.H>
+#include <FL/Fl_Window.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_File_Browser.H>
+#include <FL/Fl_File_Chooser.H>
+#include <FL/Fl_Text_Buffer.H>
+#include <FL/Fl_Text_Display.H>
+#include <FL/Fl_Value_Input.H>
+#include <FL/Fl_JPEG_Image.H>
+#include <FL/Fl_PNG_Image.H>
+#include <FL/Fl_Box.H>
+#include <FL/Fl_Progress.H>
+Fl_Progress* progressBar;
+Fl_Button* buttonMeanColor;
+Fl_Button* buttonVariance;
+Fl_Button* buttonSkewness ;
+Fl_Button* buttonEnergy;
+Fl_Button* buttonReuseImages ;
+Fl_Button* buttonAlignement ;
+Fl_Button* buttonKmeans ;
+Fl_Button* buttonStatMoyenne ;
+
+#include "includes/alignmentMosaic.hpp"
+#include "includes/meanFeatureMosaic.hpp"
 
 using namespace cv;
 namespace fs = std::filesystem;
 
-#define STATISTICAL_FEATURES_FILE "stats_features.txt"
+struct MosaicParams {
+    std::string bitArray;
+    std::string datasetPath;
+    int blockSize;
+    std::string imagePath;
+};
+bool MC=true,V=true,S=false,E=false,IU=false,A=false,K=false,SM=true;
+std::string image;
 
-
-/**
- * @brief Extraction des statistiques d'une image
- * 
- * @param img 
- * @return StatisticalFeatures 
- */
-StatisticalFeatures processImageStats(const cv::Mat& img){
-    // Color
-    cv::Scalar mean = cv::mean(img);
-    Color c = {mean[2], mean[1], mean[0]};
-
-    // Variance & Energy
-    cv::Scalar variance;
-    cv::Scalar meanSquares;
-    cv::meanStdDev(img, meanSquares, variance);
-    Variance v = {variance[2], variance[1], variance[0]};
-    Energy e = {meanSquares[2], meanSquares[1], meanSquares[0]};
-
-    // Skewness
-    cv::Scalar meanCubed;
-    cv::Scalar meanCubedTimesMean;
-    cv::meanStdDev(img.mul(img.mul(img)), meanCubed, variance);
-    cv::meanStdDev(img.mul(img.mul(img.mul(img))), meanCubedTimesMean, variance);
-    Skewness s = {meanCubed[2] - 3 * mean[2] * meanSquares[2] + 2 * mean[2] * mean[2] * mean[2],
-                    meanCubed[1] - 3 * mean[1] * meanSquares[1] + 2 * mean[1] * mean[1] * mean[1],
-                    meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
-    
-    return {c, v, s, e};
+void buttonParamImageMC(Fl_Widget* widget, void* data) {
+    MC=!MC;
+    if(MC){
+        widget->color(FL_WHITE); 
+        widget->labelcolor(FL_BLACK);
+    }else{
+        widget->color(FL_BLACK); 
+        widget->labelcolor(FL_WHITE);
+    }
+}
+void buttonParamImageV(Fl_Widget* widget, void* data) {
+    V=!V;
+    if(V){
+        widget->color(FL_WHITE); 
+        widget->labelcolor(FL_BLACK);
+    }else{
+        widget->color(FL_BLACK); 
+        widget->labelcolor(FL_WHITE);
+    }
+}
+void buttonParamImageS(Fl_Widget* widget, void* data) {
+    S=!S;
+    if(S){
+        widget->color(FL_WHITE); 
+        widget->labelcolor(FL_BLACK);
+    }else{
+        widget->color(FL_BLACK); 
+        widget->labelcolor(FL_WHITE);
+    }
+}
+void buttonParamImageE(Fl_Widget* widget, void* data) {
+    E=!E;
+    if(E){
+        widget->color(FL_WHITE); 
+        widget->labelcolor(FL_BLACK);
+    }else{
+        widget->color(FL_BLACK); 
+        widget->labelcolor(FL_WHITE);
+    }
+}
+void buttonParamImageIU(Fl_Widget* widget, void* data) {
+    IU=!IU;
+    if(IU){
+        widget->color(FL_WHITE); 
+        widget->labelcolor(FL_BLACK);
+    }else{
+        widget->color(FL_BLACK); 
+        widget->labelcolor(FL_WHITE);
+    }
+}
+void buttonParamImageAlignement(Fl_Widget* widget, void* data) {
+    A=true;
+    SM=false;
+    K=false;
+    buttonMeanColor->hide();
+    buttonVariance->hide();
+    buttonSkewness->hide();
+    buttonEnergy->hide();
+    buttonReuseImages->show();
+    widget->color(FL_WHITE); 
+    widget->labelcolor(FL_BLACK);
+    buttonKmeans->color(FL_BLACK);
+    buttonKmeans->labelcolor(FL_WHITE);
+    buttonKmeans->redraw();
+    buttonStatMoyenne->color(FL_BLACK);
+    buttonStatMoyenne->labelcolor(FL_WHITE);
+    buttonStatMoyenne->redraw();
+    Fl::check();
+}
+void buttonParamImageStatMoyenne(Fl_Widget* widget, void* data) {
+    SM=true;
+    A=false;
+    K=false;
+    buttonMeanColor->show();
+    buttonVariance->show();
+    buttonSkewness->show();
+    buttonEnergy->show();
+    buttonReuseImages->show();
+    widget->color(FL_WHITE); 
+    widget->labelcolor(FL_BLACK);
+    buttonKmeans->color(FL_BLACK);
+    buttonKmeans->labelcolor(FL_WHITE);
+    buttonKmeans->redraw();
+    buttonAlignement->color(FL_BLACK);
+    buttonAlignement->labelcolor(FL_WHITE);
+    buttonAlignement->redraw();
+    Fl::check();
+}
+void buttonParamImageKmeans(Fl_Widget* widget, void* data) {
+    K=true;
+    A=false;
+    SM=false;
+    buttonMeanColor->hide();
+    buttonVariance->hide();
+    buttonSkewness->hide();
+    buttonEnergy->hide();
+    buttonReuseImages->hide();
+    widget->color(FL_WHITE); 
+    widget->labelcolor(FL_BLACK);
+    buttonStatMoyenne->color(FL_BLACK);
+    buttonStatMoyenne->labelcolor(FL_WHITE);
+    buttonStatMoyenne->redraw();
+    buttonAlignement->color(FL_BLACK);
+    buttonAlignement->labelcolor(FL_WHITE);
+    buttonAlignement->redraw();
+    Fl::check();
 }
 
-std::string generateResizedDataset(const std::string& folderPath, int blocSize){
-    std::cout << "Resizing the dataset" << std::endl;
-    int progress = 0;
-    int total = std::distance(fs::directory_iterator(folderPath), fs::directory_iterator{});
-    std::string resizedFolder = folderPath;
-    if (resizedFolder.back() == '/') resizedFolder.pop_back(); // remove the last / if it exists
-    resizedFolder += "_resized_" + std::to_string(blocSize);
-    if (!fs::exists(resizedFolder)){
-        fs::create_directory(resizedFolder);
+
+char msg[250];
+void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
+    // progressBar->draw();
+    MosaicParams* param = (MosaicParams*)data;
+    std::string bitArray=std::to_string(MC) + std::to_string(V) + std::to_string(S) + std::to_string(E) + std::to_string(IU);
+    GenerateMosaicParams params;
+    params.setFromBitArray(bitArray);
+    params.toString();
+    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(param->datasetPath);
+    cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
+    cv::Mat mosaic;
+    if(K){
+        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, 5);
     }
-    for (const auto& entry : fs::directory_iterator(folderPath)){
-        try {
-            // checkif the resized image already exists
-            if (fs::exists(resizedFolder + "/" + entry.path().filename().string())){
-                progress++;
-                continue;
-            }
-            cv::Mat img = cv::imread(entry.path().string());
-            cv::resize(img, img, cv::Size(blocSize, blocSize));
-            cv::imwrite(resizedFolder + "/" + entry.path().filename().string(), img);
-            progress++;
-            if (progress % 250 == 0){
-                std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
-            }
-        } catch (cv::Exception& e){
-            // There is probably a json file in the dataset folder, catching it's error here
-            std::cout << "Error while processing image : " << entry.path().string() << std::endl;
-        }
+    else if(A){
+        if (IU)
+            mosaic=generateMosaicUsingAlignmentSingleThread(inputImage, param->blockSize, param->datasetPath, IU);
+        else
+            mosaic=generateMosaicUsingAlignment(inputImage, param->blockSize, param->datasetPath);
+    }else{
+        mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
-    std::cout << "Progress : 100%" << std::endl;
-    return resizedFolder;
+    cv::imwrite("mosaic_output_i.jpg", mosaic);
+    float psnr = PSNR(inputImage, mosaic);
+    sprintf(msg, "image mosaique PSNR : %f", psnr);
+    Fl_JPEG_Image* image=new Fl_JPEG_Image("./mosaic_output_i.jpg");
+    Fl_Window* window=new Fl_Window(600,600);
+    Fl_Box* box=new Fl_Box(0,0,600,600,msg);
+    std::cout<<msg<<std::endl;
+    box->image(image);
+    window->end();
+    window->show();
 }
 
-/**
- * @brief Prétraitement du dataset pour obtenir les statistiques des images
- * 
- * @param folderPath 
- * @return std::map<std::string, StatisticalFeatures> 
- */
-std::map<std::string, StatisticalFeatures> preprocessDatasetStats(const std::string& folderPath){
-    std::map<std::string, StatisticalFeatures> meanValues;
-
-    int progress = 0;
-    int total = std::distance(fs::directory_iterator(folderPath), fs::directory_iterator{});
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-        try {
-            cv::Mat img = cv::imread(entry.path().string());
-            
-            meanValues[entry.path().string()] = processImageStats(img);
-
-            progress++;
-            if (progress % 250 == 0){
-                std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
-            }
-        } catch (cv::Exception& e){
-            // There is probably a json file in the dataset folder, catching it's error here
-            std::cout << std::endl;
-            std::cout << "Error while processing image : " << entry.path().string() << std::endl;
-        }
+void fonctionChoisirImage(Fl_Widget* widget, void* data) {
+    // Fl_Text_Buffer * param = (Fl_Text_Buffer *)data;
+    std::map<Fl_Text_Buffer *,std::string> map = *(std::map<Fl_Text_Buffer *,std::string> *)data;
+    Fl_Text_Buffer *param = map.begin()->first;
+    // std::string image = map.begin()->second;
+    std::string imageFolder = getenv("HOME");
+    imageFolder += "/Pictures";
+    // test if imageFolder exists
+    if (!fs::exists(imageFolder)) {
+        imageFolder = getenv("HOME");
+        imageFolder += "/Images";
     }
-    std::cout << "Progress : 100%" << std::endl;
-    return meanValues;
+    Fl_File_Chooser *fileChooser=new Fl_File_Chooser(imageFolder.c_str(), NULL, Fl_File_Chooser::SINGLE, "images");
+    fileChooser->show();
+    while (fileChooser->shown()) {
+        Fl::wait(); 
+    }
+    if (fileChooser->value() != NULL) {
+        param->text(fileChooser->value());
+        image = fileChooser->value();
+    }else{
+        param->text("");
+        image = "";
+    }
 }
+void fonctionVoirImage(Fl_Widget* widget, void* data) {
+    if (image != "") {
+        Fl_Image* original = nullptr;
+        // Detect extension (lowercase comparison)
+        std::string ext = image.substr(image.find_last_of('.') + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-
-std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
-    std::map<std::string, Color> meanValues;
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-
-        cv::Mat img = cv::imread(entry.path().string());
-
-        cv::Scalar mean = cv::mean(img);
-        meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
-    }
-
-    return meanValues;
-}
-
-
-/**
- * @brief Découpe une image en blocs de taille blockSize
- * 
- * @param image 
- * @param blockSize 
- * @return std::vector<cv::Mat> 
- */
-std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
-    std::vector<cv::Mat> blocks;
-
-    int height = image.rows;
-    int width = image.cols;
-
-    for (int y = 0; y < height; y += blockSize) {
-        for (int x = 0; x < width; x+= blockSize)
-        {
-            int blockWidth = std::min(blockSize, width - x);
-            int blockHeight = std::min(blockSize, height - y);
-
-            cv::Rect roi(x, y, blockWidth, blockHeight);
-            cv::Mat block = image(roi).clone();
-            blocks.push_back(block);
-        } 
-    }
-
-    return blocks;
-    
-}
-
-/**
- * @brief Calcul de la distance entre deux images
- * 
- * @param a 
- * @param b 
- * @param params 
- * @return double 
- */
-double computeDistance(StatisticalFeatures a, StatisticalFeatures b, GenerateMosaicParams params){
-    double distance = 0;
-    if(params.meanColor){
-        distance += sqrt(pow(a.mean.r - b.mean.r, 2) + pow(a.mean.g - b.mean.g, 2) + pow(a.mean.b - b.mean.b, 2));
-    }
-    if(params.variance){
-        distance += sqrt(pow(a.variance.r - b.variance.r, 2) + pow(a.variance.g - b.variance.g, 2) + pow(a.variance.b - b.variance.b, 2));
-    }
-    if(params.skewness){
-        distance += sqrt(pow(a.skewness.r - b.skewness.r, 2) + pow(a.skewness.g - b.skewness.g, 2) + pow(a.skewness.b - b.skewness.b, 2));
-    }
-    if(params.energy){
-        distance += sqrt(pow(a.energy.r - b.energy.r, 2) + pow(a.energy.g - b.energy.g, 2) + pow(a.energy.b - b.energy.b, 2));
-    }
-    return distance;
-}
-
-double computeManhattanDistance(StatisticalFeatures a, StatisticalFeatures b, GenerateMosaicParams params){
-    double distance = 0;
-    if(params.meanColor){
-        distance += abs(a.mean.r - b.mean.r) + abs(a.mean.g - b.mean.g) + abs(a.mean.b - b.mean.b);
-    }
-    if(params.variance){
-        distance += abs(a.variance.r - b.variance.r) + abs(a.variance.g - b.variance.g) + abs(a.variance.b - b.variance.b);
-    }
-    if(params.skewness){
-        distance += abs(a.skewness.r - b.skewness.r) + abs(a.skewness.g - b.skewness.g) + abs(a.skewness.b - b.skewness.b);
-    }
-    if(params.energy){
-        distance += abs(a.energy.r - b.energy.r) + abs(a.energy.g - b.energy.g) + abs(a.energy.b - b.energy.b);
-    }
-    return distance;
-}
-
-/**
- * @brief Génère une mosaïque à partir d'une image et d'un ensemble d'images de référence
- * 
- * @param inputImage 
- * @param meanValues 
- * @param blockSize 
- * @param params 
- * @return cv::Mat 
- */
-cv::Mat generateMosaic(const cv::Mat& inputImage, std::map<std::string, StatisticalFeatures> &meanValues, int blockSize, GenerateMosaicParams params){
-    std::cout << "Generating mosaic with parameters : block size : " << blockSize << ", " << params.toString() << std::endl;
-    cv::Mat mosaic = inputImage.clone();
-    std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
-    int rowBlocks = inputImage.rows / blockSize;
-    int colBlocks = inputImage.cols / blockSize;
-    int totalBlocks = rowBlocks * colBlocks;
-    if (params.reuseImages){
-        std::vector<std::vector<double>> distances;
-        std::vector<std::vector<std::string>> bestMatches;
-        std::cout << "Calculating distances" << std::endl;
-        for (int i = 0; i < rowBlocks; i++)
-        {
-            for (int j = 0; j < colBlocks; j++)
-            {
-                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-                cv::Mat block = mosaic(roi).clone();
-                StatisticalFeatures blockStats = processImageStats(block);
-                std::vector<std::string> listeMatch;
-                std::vector<double> listeDistance;
-                for(const auto& entry : meanValues){
-                    StatisticalFeatures second = entry.second;
-                    double distance = computeDistance(blockStats, second, params);
-                    if(listeDistance.size()==0){
-                        listeMatch.push_back(entry.first);
-                        listeDistance.push_back(distance);
-                    }
-                    else{
-                        if(listeDistance[0]>distance){
-                            listeDistance.insert(listeDistance.begin(),distance);
-                            listeMatch.insert(listeMatch.begin(),entry.first);
-                            if(listeDistance.size()>rowBlocks*colBlocks){
-                                listeDistance.pop_back();
-                                listeMatch.pop_back();
-                            }
-                        }
-                        else{
-                            if(distance<listeDistance[listeDistance.size()-1]){
-                                bool a=true;
-                                for(int m=listeDistance.size()-1;m>=0;m--){
-                                    if(distance>listeDistance[m]){
-                                        listeDistance.insert(listeDistance.begin()+m,distance);
-                                        listeMatch.insert(listeMatch.begin()+m,entry.first);
-                                        if(listeDistance.size()>rowBlocks*colBlocks){
-                                            listeDistance.pop_back();
-                                            listeMatch.pop_back();
-                                        }
-                                        a=false;
-                                        break;
-                                    }
-                                }
-                                if(listeDistance.size()<rowBlocks*colBlocks){
-                                    if(a){
-                                        listeDistance.push_back(distance);
-                                        listeMatch.push_back(entry.first);
-                                    }
-                                }
-                            }else{
-                                if(listeDistance.size()<rowBlocks*colBlocks){
-                                    listeDistance.push_back(distance);
-                                    listeMatch.push_back(entry.first);
-                                }
-                            }
-                        }
-                    }
-                }
-                distances.push_back(listeDistance);
-                bestMatches.push_back(listeMatch);
-            }
-            std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
-        }
-        std::cout << "Progress : 100%" << std::endl;
-        // Lister la meilleur imagette pour chaque bloc
-        std::vector<std::string> listeMatch;
-        std::vector<std::vector<std::vector<double>>> listeValMatch;
-        for(int i=0;i<rowBlocks;i++){
-            for(int j=0;j<colBlocks;j++){
-                int taille=i*rowBlocks+j;
-                for(int k=0;k<distances[taille].size();k++){
-                    std::vector<double> a{distances[taille][k], static_cast<double>(i), static_cast<double>(j)};
-                    auto b=std::find(listeMatch.begin(),listeMatch.end(),bestMatches[taille][k]);
-                    if(b==listeMatch.end()){
-                        listeMatch.push_back(bestMatches[taille][k]);
-                        std::vector<std::vector<double>> c;
-                        c.push_back(a);
-                        listeValMatch.push_back(c);
-                    }else{
-                        int c=std::distance(listeMatch.begin(),b);
-                        listeValMatch[c].push_back(a);
-                    }
-                }
-            }
-
-        }
-        // Pour chaque bloc, est ce que la meilleure imagette de chjaque bloc est la valeur minimale ? si oui on lui donne et on l'enleve
-        std::vector<std::string> imageUsed;
-        std::vector<std::vector<std::string>> imageFinale;
-        std::vector<std::vector<bool>> blockBool;
-        for (int i = 0; i < rowBlocks; i++)
-        {
-            blockBool.push_back(std::vector<bool>());
-            imageFinale.push_back(std::vector<std::string>());
-            for (int j = 0; j < colBlocks; j++)
-            {
-                blockBool[i].push_back(false);
-                imageFinale[i].push_back("");
-            }
-        }
-        while(imageUsed.size()<distances.size()){
-            for(int i=0;i<rowBlocks;i++){
-                for(int j=0;j<colBlocks;j++){
-                    if(blockBool[i][j]==false){
-                        int k=0;
-                        while(std::find(imageUsed.begin(),imageUsed.end(),bestMatches[i*rowBlocks+j][k])!=imageUsed.end()){
-                            k++;
-                        }
-                        std::string bestMatch=bestMatches[i*rowBlocks+j][k];
-                        auto a=std::find(listeMatch.begin(),listeMatch.end(),bestMatch);
-                        int l=std::distance(listeMatch.begin(),a);
-                        bool boo=true;
-                        for(int m=0;m<listeValMatch[l].size();m++){
-                            if(blockBool[listeValMatch[l][m][1]][listeValMatch[l][m][2]]==false && listeValMatch[l][m][1]*rowBlocks+listeValMatch[l][m][2]!=i*rowBlocks+j){
-                                boo=false;
-                                break;
-                            }
-                            if(listeValMatch[l][m][1]*rowBlocks+listeValMatch[l][m][2]==i*rowBlocks+j){
-                                break;
-                            }
-                        }
-                        if(boo){
-                            blockBool[i][j]=true;
-                            imageUsed.push_back(bestMatch);
-                            imageFinale[i][j]=bestMatch;
-                        }
-                    }
-                }
-            }
+        if (ext == "jpg" || ext == "jpeg") {
+            original = new Fl_JPEG_Image(image.c_str());
+        } else if (ext == "png") {
+            original = new Fl_PNG_Image(image.c_str());
+        } else {
+            fl_alert("Format non supporté : %s", ext.c_str());
+            return;
         }
 
-        for (int i = 0; i < rowBlocks; i++)
-        {
-            for (int j = 0; j < colBlocks; j++)
-            {
-                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-                cv::Mat block = mosaic(roi).clone();
-                cv::Mat bestMatchImg = cv::imread(imageFinale[i][j]);
-                cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
-                bestMatchImg.copyTo(mosaic(roi));
-            }
-        }
-        return mosaic;
-    } else {
-        for (int i = 0; i < rowBlocks; i++)
-        {
-            for (int j = 0; j < colBlocks; j++)
-            {
-                cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-                cv::Mat block = mosaic(roi).clone();
-                StatisticalFeatures blockStats = processImageStats(block);
-                double minDistance = std::numeric_limits<double>::max();
-                std::string bestMatch;
-                for(const auto& entry : meanValues){
-                    StatisticalFeatures second = entry.second;
-                    double distance = computeDistance(blockStats, second, params);
-                    if(distance < minDistance){
-                        minDistance = distance;
-                        bestMatch = entry.first;
-                    }
-                }
-                cv::Mat bestMatchImg = cv::imread(bestMatch);
-                cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
-                bestMatchImg.copyTo(mosaic(roi));
-                if (!params.reuseImages) meanValues.erase(bestMatch);
-            }
-            std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
-        }
-        std::cout << "Progress : 100%" << std::endl;
-        return mosaic;
-    }
-    return mosaic;
-}
-
-double computeAlignmentScore(const cv::Mat& block, const cv::Mat& reference){
-
-    // compute the alignment score as if the images were a big string of pixel values
-    int maxShift = std::max(block.rows, block.cols);
-    double maxScore = 0;
-    for (int shiftX = -maxShift; shiftX < maxShift; shiftX++)
-    {
-        for (int shiftY = -maxShift; shiftY < maxShift; shiftY++)
-        {
-            double score = 0;
-            for (int i = 0; i < block.rows; i++)
-            {
-                for (int j = 0; j < block.cols; j++)
-                {
-                    int x = j + shiftX;
-                    int y = i + shiftY;
-                    if (x >= 0 && x < reference.cols && y >= 0 && y < reference.rows){
-                        cv::Vec3b blockPixel = block.at<cv::Vec3b>(i, j);
-                        cv::Vec3b refPixel = reference.at<cv::Vec3b>(y, x);
-                        score += sqrt(pow(blockPixel[0] - refPixel[0], 2) + pow(blockPixel[1] - refPixel[1], 2) + pow(blockPixel[2] - refPixel[2], 2));
-                    }
-                }
-            }
-            if (score > maxScore){
-                maxScore = score;
-            }
-        }
-    }
-
-    return maxScore;
-}
-
-cv::Mat generateMosaicUsingAlignment(const cv::Mat& inputImage, int blockSize, const std::string& folderPath, GenerateMosaicParams params){
-    std::cout << "Generating mosaic with parameters : block size : " << blockSize << ", " << params.toString() << std::endl;
-    cv::Mat mosaic = inputImage.clone();
-    std::vector<cv::Mat> blocks = splitImageIntoBlocks(inputImage, blockSize);
-
-    int rowBlocks = inputImage.rows / blockSize;
-    int colBlocks = inputImage.cols / blockSize;
-
-    int totalBlocks = rowBlocks * colBlocks;
-
-    std::string resizedFolder = generateResizedDataset(folderPath, blockSize);
-    std::cout << "Resized folder : " << resizedFolder << std::endl;
-    for (int i = 0; i < rowBlocks; i++)
-    {
-        for (int j = 0; j < colBlocks; j++)
-        {
-            
-            cv::Rect roi(j * blockSize, i * blockSize, blockSize, blockSize);
-            cv::Mat block = mosaic(roi).clone();
-
-            double maxScore = 0;
-            std::string bestMatch;
-
-            for(const auto& entry : fs::directory_iterator(resizedFolder)){
-                cv::Mat reference = cv::imread(entry.path().string());
-                double score = computeAlignmentScore(block, reference);
-
-                if(score > maxScore){
-                    maxScore = score;
-                    bestMatch = entry.path().string();
-                }
-            }
-
-            cv::Mat bestMatchImg = cv::imread(bestMatch);
-
-            // resize de l'imagette pour qu'elle corresponde à la taille du bloc
-            cv::resize(bestMatchImg, bestMatchImg, cv::Size(blockSize, blockSize));
-
-            bestMatchImg.copyTo(mosaic(roi));
+        if (original->fail()) {
+            fl_alert("Échec du chargement de l'image !");
+            delete original;
+            return;
         }
 
-        std::cout << "Progress : " << int((i * colBlocks) / (float)totalBlocks * 100) << "%" << std::flush << "\r";
-    }
-    std::cout << "Progress : 100%" << std::endl;
-    return mosaic;
-}
-          
+        int ow = original->w();
+        int oh = original->h();
 
-/**
- * @brief Précalcul des statistiques des images du dataset si elles n'ont pas déjà été calculées
- * 
- * @param folderPath 
- * @return std::map<std::string, StatisticalFeatures> 
- */
-std::map<std::string, StatisticalFeatures> checkIfAlreadyPreProcessed(const std::string& folderPath){
-    std::map<std::string, StatisticalFeatures> meanValues;
+        int maxW = 600;
+        int maxH = 600;
 
-    if(fs::exists(STATISTICAL_FEATURES_FILE)){
-        std::cout << "Loading statistical features from file" << std::endl;
-        std::ifstream file(STATISTICAL_FEATURES_FILE);
-        std::string line;
-        while(std::getline(file, line)){
-            std::istringstream iss(line);
-            std::string key;
-            Color c;
-            Variance v;
-            Skewness s;
-            Energy e;
-            iss >> key >> c.r >> c.g >> c.b >> v.r >> v.g >> v.b >> s.r >> s.g >> s.b >> e.r >> e.g >> e.b;
-            meanValues[key] = {c, v, s, e};
+        Fl_Image* to_display = original;
+
+        if (ow > maxW || oh > maxH) {
+            double scale = std::min((double)maxW / ow, (double)maxH / oh);
+            int nw = (int)(ow * scale);
+            int nh = (int)(oh * scale);
+
+            Fl_RGB_Image* rgb = (Fl_RGB_Image*)original->copy(nw, nh);
+            to_display = rgb;
+            delete original;
         }
-        file.close();
-    } else {
-        std::cout << "Preprocessing the dataset" << std::endl;
-        meanValues = preprocessDatasetStats(folderPath);
-    
-        // Write the data to a file
-        std::ofstream file(STATISTICAL_FEATURES_FILE);
-        for(const auto& entry : meanValues){
-            file << entry.first << " " << entry.second.mean.r << " " << entry.second.mean.g << " " << entry.second.mean.b << " "
-                 << entry.second.variance.r << " " << entry.second.variance.g << " " << entry.second.variance.b << " "
-                 << entry.second.skewness.r << " " << entry.second.skewness.g << " " << entry.second.skewness.b << " "
-                 << entry.second.energy.r << " " << entry.second.energy.g << " " << entry.second.energy.b << std::endl;
-        }
-        file.close();
-    }
 
-    return meanValues;
-}
-
-/**
- * @brief Calcul du PSNR entre deux images
- * 
- * @param I1 
- * @param I2 
- * @return float 
- */
-float PSNR(const cv::Mat& I1, const cv::Mat& I2)
-{
-    cv::Mat s1;
-    cv::absdiff(I1, I2, s1);   // |I1 - I2|
-    s1.convertTo(s1, CV_32F);  // cannot make a square on 8 bits
-    s1 = s1.mul(s1);           // |I1 - I2|^2
-
-    cv::Scalar s = cv::sum(s1);
-
-    double sse = s.val[0] + s.val[1] + s.val[2];
-
-    if( sse <= 1e-10)
-        return 0;
-    else
-    {
-        double mse = sse / (double)(I1.channels() * I1.total());
-        double psnr = 10.0 * log10((255 * 255) / mse);
-        return psnr;
+        Fl_Window* window = new Fl_Window(600, 600, "Aperçu image");
+        Fl_Box* box = new Fl_Box(0, 0, 600, 600);
+        box->image(to_display);
+        window->end();
+        window->show();
     }
 }
-
-cv::Mat fitBlocks(const cv::Mat& img, int blockSize){
-    int height = img.rows;
-    int width = img.cols;
-
-    int heightToRemove = height % blockSize;
-    int widthToRemove = width % blockSize;
-
-    cv::Rect roi(0, 0, width - widthToRemove, height - heightToRemove);
-    cv::Mat result = img(roi).clone();
-
-    return result;
-}
-
-
 
 int main(int argc, char** argv )
 {
-    if ( argc < 4 || argc > 6 )
-    {
-        printf("usage: %s <Image_Path> <DATASET_Folder_Path> <Bloc size> [parameters as bit array] [k]\n", argv[0]);
-        std::cout << "Parameters : meanColor, variance, skewness, energy, reuseImages. Ex : 10101" << std::endl;
-        std::cout << "k : nombre de clusters (optionnel, par défaut k = nombre total de blocs)" << std::endl;
-
-    }
-
-    cv::Mat inputImage = cv::imread(argv[1], cv::IMREAD_COLOR);
-    if(inputImage.empty()) {
-        printf("Impossible de charger l'image originale.");
-        return -1;
-    }
-
-    int blockSize = std::stoi(argv[3]);
-
-
-    if (inputImage.size().width % blockSize != 0 || inputImage.size().height % blockSize != 0){
-        std::cout << "La taille de l'image n'est pas un multiple de la taille du bloc : " << blockSize << ", taille de l'image : " << inputImage.size() << std::endl;
-        inputImage = fitBlocks(inputImage, blockSize);
-    }
-
-    int width = inputImage.cols;
-    int height = inputImage.rows;
-
-    int rowBlocks = height / blockSize;
-    int colBlocks = width / blockSize;
-    int totalBlocks = rowBlocks * colBlocks;
-
-    int k = (width * height) / (blockSize * blockSize);
-    if (argc == 6){
-        k = std::stoi(argv[5]);
-    }
-
-    std::cout << "Loaded the image : " << argv[1] << " of size : " << inputImage.size() << std::endl;
-
-    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(argv[2]);
-
-    GenerateMosaicParams params;
-    if (argc == 5){
-        params.setFromBitArray(argv[4]);
-    }/* else { // Example, this specific example is unnecessary because of the default constructor
-        params.meanColor = true;
-        params.variance = true;
-        params.skewness = false;
-        params.energy = false;
-        params.reuseImages = false;
-    }*/
-
-    //cv::Mat mosaic = generateMosaic(inputImage, meanValues, blockSize, params);
-    //cv::Mat mosaic = generateMosaicUsingAlignment(inputImage, blockSize, argv[2], params);
-
-    //cv::Mat mosaic = generateTamuraMosaic(inputImage, argv[2], blockSize);
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    cv::Mat mosaic = generateMosaicWithKMeans(inputImage, meanValues, blockSize, params, k);
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-    
-    std::cout << "Temps de génération de la mosaïque avec KMeans : " << elapsed.count() << " secondes" << std::endl;
-
-    float psnr = PSNR(inputImage, mosaic);
-    std::cout << "Mosaic generated. PSNR : " << psnr << std::endl;
-
-    // cv::namedWindow("Mosaïque", cv::WINDOW_AUTOSIZE);
-    // cv::imshow("Mosaïque", mosaic);
-    // cv::waitKey(0);
-
-    cv::imwrite("mosaic_output.jpg", mosaic);
-    return 0;
+    Fl_Window* window = new Fl_Window(600, 600, "Interface mosaïque");
+    progressBar=new Fl_Progress(0,575,600,25);
+    Fl_Text_Buffer *buffText=new Fl_Text_Buffer();
+    Fl_Text_Display *dispText = new Fl_Text_Display(0, 0, 600, 30);
+    buffText->text("Caractéristiques de l'image :");
+    dispText->buffer(buffText);
+    dispText->color(FL_GRAY);
+    buttonMeanColor = new Fl_Button(50, 50, 125, 25, "Couleur moyenne");
+    buttonVariance = new Fl_Button(237, 50, 125, 25, "Variance");
+    buttonSkewness = new Fl_Button(425, 50, 125, 25, "Asymétrie");
+    buttonEnergy = new Fl_Button(50, 125, 125, 25, "Energie");
+    buttonReuseImages = new Fl_Button(237, 125, 125, 25, "Image unique");
+    buttonAlignement = new Fl_Button(50, 200, 125, 25, "Alignement");
+    buttonKmeans = new Fl_Button(237, 200, 125, 25, "Kmeans");
+    buttonStatMoyenne = new Fl_Button(425, 200, 125, 25, "Stat moyenne");
+    buttonMeanColor->color(FL_WHITE); 
+    buttonMeanColor->labelcolor(FL_BLACK);
+    buttonMeanColor->callback(buttonParamImageMC);
+    // buttonMeanColor->hide();
+    buttonVariance->color(FL_WHITE); 
+    buttonVariance->labelcolor(FL_BLACK);
+    buttonVariance->callback(buttonParamImageV);
+    buttonSkewness->color(FL_BLACK); 
+    buttonSkewness->labelcolor(FL_WHITE);
+    buttonSkewness->callback(buttonParamImageS);
+    buttonEnergy->color(FL_BLACK); 
+    buttonEnergy->labelcolor(FL_WHITE);
+    buttonEnergy->callback(buttonParamImageE);
+    buttonReuseImages->color(FL_BLACK); 
+    buttonReuseImages->labelcolor(FL_WHITE);
+    buttonReuseImages->callback(buttonParamImageIU);
+    buttonAlignement->color(FL_BLACK); 
+    buttonAlignement->labelcolor(FL_WHITE);
+    buttonAlignement->callback(buttonParamImageAlignement);
+    buttonKmeans->color(FL_BLACK); 
+    buttonKmeans->labelcolor(FL_WHITE);
+    buttonKmeans->callback(buttonParamImageKmeans);
+    buttonStatMoyenne->color(FL_WHITE); 
+    buttonStatMoyenne->labelcolor(FL_BLACK);
+    buttonStatMoyenne->callback(buttonParamImageStatMoyenne);
+    Fl_Button* buttonChoisirImage = new Fl_Button(10, 300, 100, 25, "Choisir image");
+    Fl_Text_Buffer *buff=new Fl_Text_Buffer();
+    Fl_Text_Display *disp = new Fl_Text_Display(120, 300, 400, 50);
+    Fl_Value_Input *blocSize = new Fl_Value_Input(125, 400, 50, 25, "Taille des blocs : ");
+    blocSize->value(10);
+    std::map<Fl_Text_Buffer *,std::string> map{{buff,image}};
+    buttonChoisirImage->callback(fonctionChoisirImage,&map);
+    disp->buffer(buff);
+    Fl_Button* buttonVoirImage = new Fl_Button(10, 325, 100, 25, "Voir image");
+    buttonVoirImage->callback(fonctionVoirImage);
+    Fl_Button* buttonCreerImage = new Fl_Button(250, 500, 100, 25, "Créer image");
+    MosaicParams bitArrayMap{"bitArray",argv[1],blocSize->value(),image};
+    buttonCreerImage->callback(fonctionButtonCreerImage,&bitArrayMap);
+    // fileBrowser->load("/home/thibaut/Downloads/projet_image/Projet-mosaique-image/img");
+    window->end();
+    window->show();
+    return Fl::run();
 }
