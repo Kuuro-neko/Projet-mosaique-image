@@ -23,6 +23,7 @@
 #include <FL/Fl_File_Browser.H>
 #include <FL/Fl_File_Chooser.H>
 #include <FL/Fl_Text_Buffer.H>
+#include <FL/Fl_Value_Slider.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_JPEG_Image.H>
@@ -38,6 +39,7 @@ Fl_Button* buttonReuseImages ;
 Fl_Button* buttonAlignement ;
 Fl_Button* buttonKmeans ;
 Fl_Button* buttonStatMoyenne ;
+Fl_Value_Slider* kmeansClusterSlider;
 
 #include "includes/alignmentMosaic.hpp"
 #include "includes/meanFeatureMosaic.hpp"
@@ -52,6 +54,7 @@ struct MosaicParams {
     std::string imagePath;
 };
 bool MC=true,V=true,S=false,E=false,IU=false,A=false,K=false,SM=true;
+int kmeansCluster=400;
 std::string image;
 
 void buttonParamImageMC(Fl_Widget* widget, void* data) {
@@ -113,6 +116,7 @@ void buttonParamImageAlignement(Fl_Widget* widget, void* data) {
     buttonSkewness->hide();
     buttonEnergy->hide();
     buttonReuseImages->show();
+    kmeansClusterSlider->hide();
     widget->color(FL_WHITE); 
     widget->labelcolor(FL_BLACK);
     buttonKmeans->color(FL_BLACK);
@@ -132,6 +136,7 @@ void buttonParamImageStatMoyenne(Fl_Widget* widget, void* data) {
     buttonSkewness->show();
     buttonEnergy->show();
     buttonReuseImages->show();
+    kmeansClusterSlider->hide();
     widget->color(FL_WHITE); 
     widget->labelcolor(FL_BLACK);
     buttonKmeans->color(FL_BLACK);
@@ -150,7 +155,8 @@ void buttonParamImageKmeans(Fl_Widget* widget, void* data) {
     buttonVariance->hide();
     buttonSkewness->hide();
     buttonEnergy->hide();
-    buttonReuseImages->hide();
+    buttonReuseImages->show();
+    kmeansClusterSlider->show();
     widget->color(FL_WHITE); 
     widget->labelcolor(FL_BLACK);
     buttonStatMoyenne->color(FL_BLACK);
@@ -287,6 +293,7 @@ int main(int argc, char** argv )
     buttonAlignement = new Fl_Button(50, 200, 125, 25, "Alignement");
     buttonKmeans = new Fl_Button(237, 200, 125, 25, "Kmeans");
     buttonStatMoyenne = new Fl_Button(425, 200, 125, 25, "Stat moyenne");
+    kmeansClusterSlider = new Fl_Value_Slider(175, 50, 250, 25, "Kmeans clusters");
     buttonMeanColor->color(FL_WHITE); 
     buttonMeanColor->labelcolor(FL_BLACK);
     buttonMeanColor->callback(buttonParamImageMC);
@@ -312,6 +319,11 @@ int main(int argc, char** argv )
     buttonStatMoyenne->color(FL_WHITE); 
     buttonStatMoyenne->labelcolor(FL_BLACK);
     buttonStatMoyenne->callback(buttonParamImageStatMoyenne);
+    kmeansClusterSlider->hide();
+    kmeansClusterSlider->type(FL_HOR_NICE_SLIDER);
+    kmeansClusterSlider->bounds(1, 1000);
+    kmeansClusterSlider->step(1);
+    kmeansClusterSlider->value(400);
     Fl_Button* buttonChoisirImage = new Fl_Button(10, 300, 100, 25, "Choisir image");
     Fl_Text_Buffer *buff=new Fl_Text_Buffer();
     Fl_Text_Display *disp = new Fl_Text_Display(120, 300, 400, 50);
