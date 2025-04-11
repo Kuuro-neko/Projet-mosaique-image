@@ -26,6 +26,7 @@ set(INCLUDES ${CMAKE_SOURCE_DIR}/src/includes)
 set(SOURCES
     ${SRC}/main.cpp
     ${INCLUDES}/alignmentMosaic.cpp
+    ${INCLUDES}/meanFeatureMosaic.cpp
 )
 
 add_executable( main ${SOURCES} )

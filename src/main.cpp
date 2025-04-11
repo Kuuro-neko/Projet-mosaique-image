@@ -20,150 +20,18 @@
 Fl_Progress* progressBar;
 
 #include "includes/alignmentMosaic.hpp"
+#include "includes/meanFeatureMosaic.hpp"
 
 using namespace cv;
 namespace fs = std::filesystem;
 
 #define STATISTICAL_FEATURES_FILE "stats_features.txt"
 
-struct Color{
-    double r;
-    double g;
-    double b;
-};
-
-struct Variance{
-    double r;
-    double g;
-    double b;
-};
-
-struct Skewness{
-    double r;
-    double g;
-    double b;
-};
-
-struct Energy {
-    double r;
-    double g;
-    double b;
-};
-
-struct StatisticalFeatures{
-    Color mean;
-    Variance variance;
-    Skewness skewness;
-    Energy energy;
-};
-
 struct Tamura{
     double coarseness;
     double contrast;
     double directionality;
 };
-
-/**
- * @brief Parameters for the generation of the mosaic
- * 
- */
-struct GenerateMosaicParams{
-    bool meanColor = true;
-    bool variance = true;
-    bool skewness = false;
-    bool energy = false;
-    bool reuseImages = false;
-    
-    /**
-     * @brief Construct a new Generate Mosaic Params object, default constructor
-     * 
-     * @param meanColor 
-     * @param variance 
-     * @param skewness 
-     * @param energy 
-     * @param reuseImages 
-     */
-    GenerateMosaicParams(bool meanColor = true, bool variance = true, bool skewness = false, bool energy = false, bool reuseImages = false) : meanColor(meanColor), variance(variance), skewness(skewness), energy(energy), reuseImages(reuseImages) {}
-    
-    void setFromBitArray(const std::string& bitArray){
-        meanColor = bitArray[0] == '1';
-        variance = bitArray[1] == '1';
-        skewness = bitArray[2] == '1';
-        energy = bitArray[3] == '1';
-        reuseImages = bitArray[4] == '1';
-    }
-
-    std::string toString() const {
-        std::string result = "meanColor : " + std::to_string(meanColor) + ", ";
-        result += "variance : " + std::to_string(variance) + ", ";
-        result += "skewness : " + std::to_string(skewness) + ", ";
-        result += "energy : " + std::to_string(energy) + ", ";
-        result += "reuseImages : " + std::to_string(reuseImages);
-        return result;
-    }
-};
-
-/**
- * @brief Extraction des statistiques d'une image
- * 
- * @param img 
- * @return StatisticalFeatures 
- */
-StatisticalFeatures processImageStats(const cv::Mat& img){
-    // Color
-    cv::Scalar mean = cv::mean(img);
-    Color c = {mean[2], mean[1], mean[0]};
-
-    // Variance & Energy
-    cv::Scalar variance;
-    cv::Scalar meanSquares;
-    cv::meanStdDev(img, meanSquares, variance);
-    Variance v = {variance[2], variance[1], variance[0]};
-    Energy e = {meanSquares[2], meanSquares[1], meanSquares[0]};
-
-    // Skewness
-    cv::Scalar meanCubed;
-    cv::Scalar meanCubedTimesMean;
-    cv::meanStdDev(img.mul(img.mul(img)), meanCubed, variance);
-    cv::meanStdDev(img.mul(img.mul(img.mul(img))), meanCubedTimesMean, variance);
-    Skewness s = {meanCubed[2] - 3 * mean[2] * meanSquares[2] + 2 * mean[2] * mean[2] * mean[2],
-                    meanCubed[1] - 3 * mean[1] * meanSquares[1] + 2 * mean[1] * mean[1] * mean[1],
-                    meanCubed[0] - 3 * mean[0] * meanSquares[0] + 2 * mean[0] * mean[0] * mean[0]};
-    
-    return {c, v, s, e};
-}
-
-/**
- * @brief Prétraitement du dataset pour obtenir les statistiques des images
- * 
- * @param folderPath 
- * @return std::map<std::string, StatisticalFeatures> 
- */
-std::map<std::string, StatisticalFeatures> preprocessDatasetStats(const std::string& folderPath){
-    std::map<std::string, StatisticalFeatures> meanValues;
-
-    int progress = 0;
-    int total = std::distance(fs::directory_iterator(folderPath), fs::directory_iterator{});
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-        try {
-            cv::Mat img = cv::imread(entry.path().string());
-            
-            meanValues[entry.path().string()] = processImageStats(img);
-
-            progress++;
-            if (progress % 250 == 0){
-                std::cout << "Progress : " << int(progress / (float)total * 100) << "%" << std::flush << "\r";
-            }
-        } catch (cv::Exception& e){
-            // There is probably a json file in the dataset folder, catching it's error here
-            std::cout << std::endl;
-            std::cout << "Error while processing image : " << entry.path().string() << std::endl;
-        }
-    }
-    std::cout << "Progress : 100%" << std::endl;
-    return meanValues;
-}
 
 std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderPath){
     std::map<std::string, Tamura> tamuraValues;
@@ -179,21 +47,6 @@ std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderP
 
     return tamuraValues;
 }
-
-std::map<std::string, Color> preprocessDataset(const std::string& folderPath){
-    std::map<std::string, Color> meanValues;
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-
-        cv::Mat img = cv::imread(entry.path().string());
-
-        cv::Scalar mean = cv::mean(img);
-        meanValues[entry.path().string()] = {mean[2], mean[1], mean[0]};
-    }
-
-    return meanValues;
-}
-
 
 /**
  * @brief Découpe une image en blocs de taille blockSize
@@ -222,48 +75,6 @@ std::vector<cv::Mat> splitImageIntoBlocks(const cv::Mat& image, int blockSize){
 
     return blocks;
     
-}
-
-/**
- * @brief Calcul de la distance entre deux images
- * 
- * @param a 
- * @param b 
- * @param params 
- * @return double 
- */
-double computeDistance(StatisticalFeatures a, StatisticalFeatures b, GenerateMosaicParams params){
-    double distance = 0;
-    if(params.meanColor){
-        distance += sqrt(pow(a.mean.r - b.mean.r, 2) + pow(a.mean.g - b.mean.g, 2) + pow(a.mean.b - b.mean.b, 2));
-    }
-    if(params.variance){
-        distance += sqrt(pow(a.variance.r - b.variance.r, 2) + pow(a.variance.g - b.variance.g, 2) + pow(a.variance.b - b.variance.b, 2));
-    }
-    if(params.skewness){
-        distance += sqrt(pow(a.skewness.r - b.skewness.r, 2) + pow(a.skewness.g - b.skewness.g, 2) + pow(a.skewness.b - b.skewness.b, 2));
-    }
-    if(params.energy){
-        distance += sqrt(pow(a.energy.r - b.energy.r, 2) + pow(a.energy.g - b.energy.g, 2) + pow(a.energy.b - b.energy.b, 2));
-    }
-    return distance;
-}
-
-double computeManhattanDistance(StatisticalFeatures a, StatisticalFeatures b, GenerateMosaicParams params){
-    double distance = 0;
-    if(params.meanColor){
-        distance += abs(a.mean.r - b.mean.r) + abs(a.mean.g - b.mean.g) + abs(a.mean.b - b.mean.b);
-    }
-    if(params.variance){
-        distance += abs(a.variance.r - b.variance.r) + abs(a.variance.g - b.variance.g) + abs(a.variance.b - b.variance.b);
-    }
-    if(params.skewness){
-        distance += abs(a.skewness.r - b.skewness.r) + abs(a.skewness.g - b.skewness.g) + abs(a.skewness.b - b.skewness.b);
-    }
-    if(params.energy){
-        distance += abs(a.energy.r - b.energy.r) + abs(a.energy.g - b.energy.g) + abs(a.energy.b - b.energy.b);
-    }
-    return distance;
 }
 
 /**
