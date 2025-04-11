@@ -56,6 +56,8 @@ struct MosaicParams {
 bool MC=true,V=true,S=false,E=false,IU=false,A=false,K=false,SM=true;
 int kmeansCluster=400;
 std::string image;
+std::string datasetFolder;
+int datasetSize=0;
 
 void buttonParamImageMC(Fl_Widget* widget, void* data) {
     MC=!MC;
@@ -177,13 +179,30 @@ void kmeansClusterSliderCallback(Fl_Widget* widget, void* data) {
 char msg[250];
 void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     // progressBar->draw();
+
     MosaicParams* param = (MosaicParams*)data;
     std::string bitArray=std::to_string(MC) + std::to_string(V) + std::to_string(S) + std::to_string(E) + std::to_string(IU);
     GenerateMosaicParams params;
     params.setFromBitArray(bitArray);
     params.toString();
-    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(param->datasetPath);
+    param->datasetPath = datasetFolder;
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
+    if (IU) {
+        // compute the number of blocks
+        int blockSize = ((MosaicParams*)data)->blockSize;
+        int rowBlocks = inputImage.rows / blockSize;
+        int colBlocks = inputImage.cols / blockSize;
+        int totalBlocks = rowBlocks * colBlocks;
+        if (totalBlocks == 0) {
+            fl_alert("La taille du bloc est trop grande pour l'image !");
+            return;
+        }
+        if (totalBlocks > datasetSize) {
+            fl_alert("Le nombre de blocs est supérieur au nombre d'images dans le dataset ! Changez de dataset ou désactivez l'option 'Image unique'");
+            return;
+        }
+    }
+    std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(param->datasetPath);
     cv::Mat mosaic;
     if(K){
         mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, kmeansCluster);
@@ -233,6 +252,27 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
         image = "";
     }
 }
+void fonctionChoisirDataset(Fl_Widget* widget, void* data) {
+    std::map<Fl_Text_Buffer *,std::string> map = *(std::map<Fl_Text_Buffer *,std::string> *)data;
+    Fl_Text_Buffer *param = map.begin()->first;
+    Fl_File_Chooser *fileChooser=new Fl_File_Chooser(getenv("HOME"), NULL, Fl_File_Chooser::MULTI, "dataset");
+    fileChooser->show();
+    fileChooser->type(Fl_File_Chooser::DIRECTORY);
+    while (fileChooser->shown()) {
+        Fl::wait(); 
+    }
+    if (fileChooser->value() != NULL) {
+        std::string datasetPath = fileChooser->value();
+        param->text(datasetPath.c_str());
+        datasetFolder = datasetPath;
+    }else{
+        param->text("");
+        datasetFolder = "";
+    }
+    // get the number of files in the dataset
+    datasetSize = std::distance(fs::directory_iterator(datasetFolder), fs::directory_iterator{});
+    kmeansClusterSlider->bounds(1, datasetSize);
+}
 void fonctionVoirImage(Fl_Widget* widget, void* data) {
     if (image != "") {
         Fl_Image* original = nullptr;
@@ -279,6 +319,18 @@ void fonctionVoirImage(Fl_Widget* widget, void* data) {
         window->end();
         window->show();
     }
+}
+
+void displayExistingPrecomputedDataset(Fl_Text_Buffer *buff) {
+    std::ifstream file(STATISTICAL_FEATURES_FILE);
+    std::string line;
+    std::getline(file, line);
+    std::cout << "Dataset path: " << line << std::endl;
+    datasetFolder = line;
+    buff->text(line.c_str());
+
+    datasetSize = std::distance(fs::directory_iterator(datasetFolder), fs::directory_iterator{});
+    kmeansClusterSlider->bounds(1, datasetSize);
 }
 
 int main(int argc, char** argv )
@@ -329,18 +381,25 @@ int main(int argc, char** argv )
     kmeansClusterSlider->bounds(1, 1000);
     kmeansClusterSlider->step(1);
     kmeansClusterSlider->value(400);
-    Fl_Button* buttonChoisirImage = new Fl_Button(10, 300, 100, 25, "Choisir image");
+    Fl_Button* buttonChoisirDataset = new Fl_Button(10, 300, 100, 25, "Choisir dataset");
+    Fl_Text_Buffer *buffdataset=new Fl_Text_Buffer();
+    displayExistingPrecomputedDataset(buffdataset);
+    Fl_Text_Display *dispdataset = new Fl_Text_Display(120, 300, 400, 50);
+    std::map<Fl_Text_Buffer *,std::string> mapdataset{{buffdataset,datasetFolder}};
+    buttonChoisirDataset->callback(fonctionChoisirDataset,&mapdataset);
+    dispdataset->buffer(buffdataset);
+    Fl_Button* buttonChoisirImage = new Fl_Button(10, 400, 100, 25, "Choisir image");
     Fl_Text_Buffer *buff=new Fl_Text_Buffer();
-    Fl_Text_Display *disp = new Fl_Text_Display(120, 300, 400, 50);
-    Fl_Value_Input *blocSize = new Fl_Value_Input(125, 400, 50, 25, "Taille des blocs : ");
+    Fl_Text_Display *disp = new Fl_Text_Display(120, 400, 400, 50);
+    Fl_Value_Input *blocSize = new Fl_Value_Input(125, 500, 50, 25, "Taille des blocs : ");
     blocSize->value(10);
     std::map<Fl_Text_Buffer *,std::string> map{{buff,image}};
     buttonChoisirImage->callback(fonctionChoisirImage,&map);
     disp->buffer(buff);
-    Fl_Button* buttonVoirImage = new Fl_Button(10, 325, 100, 25, "Voir image");
+    Fl_Button* buttonVoirImage = new Fl_Button(10, 425, 100, 25, "Voir image");
     buttonVoirImage->callback(fonctionVoirImage);
     Fl_Button* buttonCreerImage = new Fl_Button(250, 500, 100, 25, "Créer image");
-    MosaicParams bitArrayMap{"bitArray",argv[1],blocSize->value(),image};
+    MosaicParams bitArrayMap{"bitArray","",blocSize->value(),image};
     buttonCreerImage->callback(fonctionButtonCreerImage,&bitArrayMap);
     // fileBrowser->load("/home/thibaut/Downloads/projet_image/Projet-mosaique-image/img");
     window->end();
