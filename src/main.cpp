@@ -6,6 +6,17 @@
 #include <map>
 #include <fstream>
 #include <sstream>
+#include <cmath>
+#include <numeric>
+#include <random>
+#include <chrono>
+#include <opencv2/core.hpp>
+#include <opencv2/core/types.hpp>
+#include <opencv2/imgproc.hpp>
+#include <thread>
+#include <atomic>
+#include "kmeans_mosaic.hpp"
+#include "statistical_features.hpp"
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Button.H>
@@ -33,27 +44,6 @@ Fl_Button* buttonStatMoyenne ;
 
 using namespace cv;
 namespace fs = std::filesystem;
-
-struct Tamura{
-    double coarseness;
-    double contrast;
-    double directionality;
-};
-
-std::map<std::string, Tamura> preprocessDatasetTamura(const std::string& folderPath){
-    std::map<std::string, Tamura> tamuraValues;
-
-    for(const auto& entry : fs::directory_iterator(folderPath)){
-
-        cv::Mat img = cv::imread(entry.path().string());
-
-        // TO DO ?
-
-        tamuraValues[entry.path().string()] = {0, 0, 0}; // TO REPLACE
-    }
-
-    return tamuraValues;
-}
 
 struct MosaicParams {
     std::string bitArray;
@@ -185,9 +175,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
     cv::Mat mosaic;
     if(K){
-        std::map<std::string, Tamura> tamuraValues = preprocessDatasetTamura(param->datasetPath);
-        std::map<std::string, StatisticalFeatures> meanValuesTamura = checkIfAlreadyPreProcessed(param->datasetPath);
-        // mosaic=generateMosaicUsingKmeans(inputImage, param->blockSize, param->datasetPath, tamuraValues, meanValuesTamura);
+        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, 5);
     }
     else if(A){
         if (IU)
