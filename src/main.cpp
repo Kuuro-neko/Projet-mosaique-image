@@ -129,7 +129,10 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
     cv::Mat mosaic;
     if(A){
-        mosaic=generateMosaicUsingAlignment(inputImage, param->blockSize, param->datasetPath);
+        if (IU)
+            mosaic=generateMosaicUsingAlignmentSingleThread(inputImage, param->blockSize, param->datasetPath, IU);
+        else
+            mosaic=generateMosaicUsingAlignment(inputImage, param->blockSize, param->datasetPath);
     }else{
         mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
