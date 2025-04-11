@@ -16,3 +16,8 @@
 # or
 ./i.sh
 ```
+## Usage
+
+To use the program, you should have a dataset of images of your choice that you will give to the program. There is a lightweight demo dataset (the Minecraft blocks one) in dataset/blocks
+
+Then chose your method and parameters and generate the mosaic !

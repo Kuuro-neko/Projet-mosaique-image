@@ -1,6 +1,7 @@
 build/
 .vscode/
-dataset/
+dataset/*
+!dataset/blocks
 mean_values.txt
 mosaic_output.jpg
 mosaic_output_i.jpg
