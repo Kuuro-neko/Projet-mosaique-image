@@ -55,6 +55,7 @@ struct MosaicParams {
     std::string datasetPath;
     int blockSize;
     std::string imagePath;
+    Fl_Text_Buffer* textBuffer;
 };
 bool MC=true,V=true,S=false,E=false,IU=false,A=false,K=false,SM=true;
 int kmeansCluster=400;
@@ -183,11 +184,12 @@ void kmeansClusterSliderCallback(Fl_Widget* widget, void* data) {
 char msg[250];
 void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     // progressBar->draw();
-
     MosaicParams* param = (MosaicParams*)data;
     std::string bitArray=std::to_string(MC) + std::to_string(V) + std::to_string(S) + std::to_string(E) + std::to_string(IU);
     GenerateMosaicParams params;
-    std::string imageFinale=param->bitArray;
+    Fl_Text_Buffer* textBuffer = param->textBuffer;
+    std::string imageFinale="/";
+    imageFinale+=textBuffer->text();
     imageFinale+=param->datasetPath;
     params.setFromBitArray(bitArray);
     params.toString();
@@ -229,7 +231,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     }else{
         mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
-    cv::imwrite(imageFinale, mosaic);
+    cv::imwrite(dossier+imageFinale, mosaic);
     float psnr = PSNR(inputImage, mosaic);
     sprintf(msg, "image mosaique PSNR : %f", psnr);
     Fl_JPEG_Image* image=new Fl_JPEG_Image("./mosaic_output_i.jpg");
@@ -483,14 +485,14 @@ int main(int argc, char** argv )
     Fl_Text_Display *dispdossier = new Fl_Text_Display(110, 450, 400, 50);
     dispdossier->buffer(buffdossier);
     std::map<Fl_Text_Buffer *,std::string> mapdossier{{buffdossier,dossier}};
-    buttonChoisirDossier->callback(fonctionChoisirDataset,&mapdossier);
+    buttonChoisirDossier->callback(fonctionChoisirDossier,&mapdossier);
     std::map<Fl_Text_Buffer *,std::string> map{{buff,image}};
     buttonChoisirImage->callback(fonctionChoisirImage,&map);
     disp->buffer(buff);
     Fl_Button* buttonVoirImage = new Fl_Button(10, 300, 100, 25, "Voir image");
     buttonVoirImage->callback(fonctionVoirImage);
     Fl_Button* buttonCreerImage = new Fl_Button(250, 525, 100, 25, "Créer image");
-    MosaicParams bitArrayMap{buffTE->text(),choice->text(),tailleSlider->value(),image};
+    MosaicParams bitArrayMap{buffTE->text(),choice->text(),tailleSlider->value(),image,buffTE};
     buttonCreerImage->callback(fonctionButtonCreerImage,&bitArrayMap);
     // fileBrowser->load("/home/thibaut/Downloads/projet_image/Projet-mosaique-image/img");
     window->end();
