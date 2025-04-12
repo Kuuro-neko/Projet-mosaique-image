@@ -50,6 +50,12 @@ Fl_Text_Buffer *buffTE=new Fl_Text_Buffer();
 #include "includes/alignmentMosaic.hpp"
 #include "includes/meanFeatureMosaic.hpp"
 
+#ifdef _WIN32
+    std::string homeDir = getenv("USERPROFILE"); // Windows
+#else
+    std::string homeDir = getenv("HOME");       // Linux/Unix
+#endif
+
 using namespace cv;
 namespace fs = std::filesystem;
 
@@ -272,11 +278,11 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
     std::map<Fl_Text_Buffer *,std::string> map = *(std::map<Fl_Text_Buffer *,std::string> *)data;
     Fl_Text_Buffer *param = map.begin()->first;
     // std::string image = map.begin()->second;
-    std::string imageFolder = getenv("HOME");
+    std::string imageFolder = homeDir;
     imageFolder += "/Pictures";
     // test if imageFolder exists
     if (!fs::exists(imageFolder)) {
-        imageFolder = getenv("HOME");
+        imageFolder = homeDir;
         imageFolder += "/Images";
     }
     Fl_File_Chooser *fileChooser=new Fl_File_Chooser(imageFolder.c_str(), NULL, Fl_File_Chooser::SINGLE, "images");
@@ -334,7 +340,7 @@ void fonctionChoisirDataset(Fl_Widget* widget, void* data) {
 void fonctionChoisirDossier(Fl_Widget* widget, void* data) {
     std::map<Fl_Text_Buffer *,std::string> map = *(std::map<Fl_Text_Buffer *,std::string> *)data;
     Fl_Text_Buffer *param = map.begin()->first;
-    Fl_File_Chooser *fileChooser=new Fl_File_Chooser(getenv("HOME"), NULL, Fl_File_Chooser::MULTI, "dataset");
+    Fl_File_Chooser *fileChooser=new Fl_File_Chooser(homeDir.c_str(), NULL, Fl_File_Chooser::MULTI, "dataset");
     fileChooser->show();
     fileChooser->type(Fl_File_Chooser::DIRECTORY);
     while (fileChooser->shown()) {
