@@ -41,6 +41,7 @@ Fl_Button* buttonReuseImages ;
 Fl_Button* buttonAlignement ;
 Fl_Button* buttonKmeans ;
 Fl_Button* buttonStatMoyenne ;
+Fl_Choice* choice;
 Fl_Value_Slider* kmeansClusterSlider;
 Fl_Value_Slider* tailleSlider;
 Fl_Value_Input *blocSize;
@@ -191,11 +192,12 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     GenerateMosaicParams params;
     Fl_Text_Buffer* textBuffer = param->textBuffer;
     std::string imageFinale="/";
-    imageFinale+=textBuffer->text();
-    imageFinale+=param->datasetPath;
+    imageFinale += buffTE->text();
+    imageFinale += choice->text();
     params.setFromBitArray(bitArray);
     params.toString();
     param->datasetPath = datasetFolder;
+    param->blockSize = (int)blocSize->value();
     if (image == "") {
         fl_alert("Veuillez choisir une image !");
         return;
@@ -233,6 +235,9 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     }else{
         mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
+    std::cout << " dossier : " << dossier << std::endl;
+    std::cout << " imageFinale : " << imageFinale << std::endl;
+    std::cout << " About to write image to file: " << dossier+imageFinale << std::endl;
     cv::imwrite(dossier+imageFinale, mosaic);
     float psnr = PSNR(inputImage, mosaic);
     sprintf(msg, "image mosaique PSNR : %f dB", psnr);
@@ -503,7 +508,7 @@ int main(int argc, char** argv )
     
     Fl_Text_Editor *dispTE = new Fl_Text_Editor(10, 400, 400, 30, "Nom image de sortie");
     dispTE->buffer(buffTE);
-    Fl_Choice* choice = new Fl_Choice(410, 400, 75, 30);
+    choice = new Fl_Choice(410, 400, 75, 30);
     choice->add(".jpg");
     choice->add(".jpeg");
     choice->add(".png");
