@@ -233,7 +233,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     }
     cv::imwrite(dossier+imageFinale, mosaic);
     float psnr = PSNR(inputImage, mosaic);
-    sprintf(msg, "image mosaique PSNR : %f", psnr);
+    sprintf(msg, "image mosaique PSNR : %f dB", psnr);
     Fl_JPEG_Image* image=new Fl_JPEG_Image((dossier+imageFinale).c_str());
 
     int maxW = 600;
