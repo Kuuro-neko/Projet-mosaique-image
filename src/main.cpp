@@ -44,6 +44,7 @@ Fl_Button* buttonStatMoyenne ;
 Fl_Value_Slider* kmeansClusterSlider;
 Fl_Value_Slider* tailleSlider;
 Fl_Value_Input *blocSize;
+Fl_Text_Buffer *buffTE=new Fl_Text_Buffer();
 
 #include "includes/alignmentMosaic.hpp"
 #include "includes/meanFeatureMosaic.hpp"
@@ -296,6 +297,9 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
         tailleSlider->value(16);
         tailleSlider->show();
         blocSize->show();
+
+        std::string imageName = fs::path(image).stem().string(); // Get the base name without extension
+        buffTE->text((imageName + "_mosaic").c_str());
     }else{
         param->text("");
         image = "";
@@ -496,7 +500,7 @@ int main(int argc, char** argv )
     dispTextBloc->buffer(buffTextBloc);
     dispTextBloc->color(FL_GRAY);
     // blocSize->value(16);
-    Fl_Text_Buffer *buffTE=new Fl_Text_Buffer();
+    
     Fl_Text_Editor *dispTE = new Fl_Text_Editor(10, 400, 400, 30, "Nom image de sortie");
     dispTE->buffer(buffTE);
     Fl_Choice* choice = new Fl_Choice(410, 400, 75, 30);
