@@ -186,6 +186,14 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     params.setFromBitArray(bitArray);
     params.toString();
     param->datasetPath = datasetFolder;
+    if (image == "") {
+        fl_alert("Veuillez choisir une image !");
+        return;
+    }
+    if (datasetFolder == "") {
+        fl_alert("Veuillez choisir un dataset !");
+        return;
+    }
     cv::Mat inputImage = cv::imread(image, cv::IMREAD_COLOR);
     if (IU) {
         // compute the number of blocks
@@ -392,7 +400,7 @@ int main(int argc, char** argv )
     Fl_Text_Buffer *buff=new Fl_Text_Buffer();
     Fl_Text_Display *disp = new Fl_Text_Display(120, 400, 400, 50);
     Fl_Value_Input *blocSize = new Fl_Value_Input(125, 500, 50, 25, "Taille des blocs : ");
-    blocSize->value(10);
+    blocSize->value(16);
     std::map<Fl_Text_Buffer *,std::string> map{{buff,image}};
     buttonChoisirImage->callback(fonctionChoisirImage,&map);
     disp->buffer(buff);
