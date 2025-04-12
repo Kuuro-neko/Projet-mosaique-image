@@ -227,10 +227,27 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     float psnr = PSNR(inputImage, mosaic);
     sprintf(msg, "image mosaique PSNR : %f", psnr);
     Fl_JPEG_Image* image=new Fl_JPEG_Image("./mosaic_output_i.jpg");
+
+    int maxW = 600;
+    int maxH = 600;
+
+    int ow = image->w();
+    int oh = image->h();
+    Fl_Image* to_display = image;
+    if (ow > maxW || oh > maxH) {
+        double scale = std::min((double)maxW / ow, (double)maxH / oh);
+        int nw = (int)(ow * scale);
+        int nh = (int)(oh * scale);
+
+        Fl_RGB_Image* rgb = (Fl_RGB_Image*)image->copy(nw, nh);
+        to_display = rgb;
+        delete image;
+    }
+
     Fl_Window* window=new Fl_Window(600,600);
     Fl_Box* box=new Fl_Box(0,0,600,600,msg);
     std::cout<<msg<<std::endl;
-    box->image(image);
+    box->image(to_display);
     window->end();
     window->show();
 }
