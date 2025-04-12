@@ -331,6 +331,10 @@ void fonctionVoirImage(Fl_Widget* widget, void* data) {
 
 void displayExistingPrecomputedDataset(Fl_Text_Buffer *buff) {
     std::ifstream file(STATISTICAL_FEATURES_FILE);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << STATISTICAL_FEATURES_FILE << std::endl;
+        return;
+    }
     std::string line;
     std::getline(file, line);
     std::cout << "Dataset path: " << line << std::endl;
