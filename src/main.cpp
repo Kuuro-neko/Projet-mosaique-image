@@ -23,6 +23,7 @@
 #include <FL/Fl_File_Browser.H>
 #include <FL/Fl_File_Chooser.H>
 #include <FL/Fl_Text_Buffer.H>
+#include <FL/Fl_Text_Editor.H>
 #include <FL/Fl_Value_Slider.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Value_Input.H>
@@ -30,6 +31,7 @@
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Progress.H>
+#include <FL/Fl_Choice.H>
 Fl_Progress* progressBar;
 Fl_Button* buttonMeanColor;
 Fl_Button* buttonVariance;
@@ -40,6 +42,7 @@ Fl_Button* buttonAlignement ;
 Fl_Button* buttonKmeans ;
 Fl_Button* buttonStatMoyenne ;
 Fl_Value_Slider* kmeansClusterSlider;
+Fl_Value_Slider* tailleSlider;
 
 #include "includes/alignmentMosaic.hpp"
 #include "includes/meanFeatureMosaic.hpp"
@@ -57,6 +60,7 @@ bool MC=true,V=true,S=false,E=false,IU=false,A=false,K=false,SM=true;
 int kmeansCluster=400;
 std::string image;
 std::string datasetFolder;
+std::string dossier;
 int datasetSize=0;
 
 void buttonParamImageMC(Fl_Widget* widget, void* data) {
@@ -183,6 +187,8 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     MosaicParams* param = (MosaicParams*)data;
     std::string bitArray=std::to_string(MC) + std::to_string(V) + std::to_string(S) + std::to_string(E) + std::to_string(IU);
     GenerateMosaicParams params;
+    std::string imageFinale=param->bitArray;
+    imageFinale+=param->datasetPath;
     params.setFromBitArray(bitArray);
     params.toString();
     param->datasetPath = datasetFolder;
@@ -223,7 +229,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     }else{
         mosaic=generateMosaic(inputImage, meanValues, param->blockSize, params, progressBar);
     }
-    cv::imwrite("mosaic_output_i.jpg", mosaic);
+    cv::imwrite(imageFinale, mosaic);
     float psnr = PSNR(inputImage, mosaic);
     sprintf(msg, "image mosaique PSNR : %f", psnr);
     Fl_JPEG_Image* image=new Fl_JPEG_Image("./mosaic_output_i.jpg");
@@ -273,6 +279,19 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
     if (fileChooser->value() != NULL) {
         param->text(fileChooser->value());
         image = fileChooser->value();
+        Fl_Image* original = nullptr;
+        // Detect extension (lowercase comparison)
+        std::string ext = image.substr(image.find_last_of('.') + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == "jpg" || ext == "jpeg") {
+            original = new Fl_JPEG_Image(image.c_str());
+        } else if (ext == "png") {
+            original = new Fl_PNG_Image(image.c_str());
+        }
+        int ow=original->w();
+        tailleSlider->bounds(1, ow);
+        tailleSlider->value(16);
+        tailleSlider->show();
     }else{
         param->text("");
         image = "";
@@ -298,6 +317,24 @@ void fonctionChoisirDataset(Fl_Widget* widget, void* data) {
     // get the number of files in the dataset
     datasetSize = std::distance(fs::directory_iterator(datasetFolder), fs::directory_iterator{});
     kmeansClusterSlider->bounds(1, datasetSize);
+}
+void fonctionChoisirDossier(Fl_Widget* widget, void* data) {
+    std::map<Fl_Text_Buffer *,std::string> map = *(std::map<Fl_Text_Buffer *,std::string> *)data;
+    Fl_Text_Buffer *param = map.begin()->first;
+    Fl_File_Chooser *fileChooser=new Fl_File_Chooser(getenv("HOME"), NULL, Fl_File_Chooser::MULTI, "dataset");
+    fileChooser->show();
+    fileChooser->type(Fl_File_Chooser::DIRECTORY);
+    while (fileChooser->shown()) {
+        Fl::wait(); 
+    }
+    if (fileChooser->value() != NULL) {
+        std::string datasetPath = fileChooser->value();
+        param->text(datasetPath.c_str());
+        dossier = datasetPath;
+    }else{
+        param->text("");
+        dossier = "";
+    }
 }
 void fonctionVoirImage(Fl_Widget* widget, void* data) {
     if (image != "") {
@@ -375,11 +412,11 @@ int main(int argc, char** argv )
     buttonMeanColor = new Fl_Button(50, 50, 125, 25, "Couleur moyenne");
     buttonVariance = new Fl_Button(237, 50, 125, 25, "Variance");
     buttonSkewness = new Fl_Button(425, 50, 125, 25, "Asymétrie");
-    buttonEnergy = new Fl_Button(50, 125, 125, 25, "Energie");
-    buttonReuseImages = new Fl_Button(237, 125, 125, 25, "Image unique");
-    buttonAlignement = new Fl_Button(50, 200, 125, 25, "Alignement");
-    buttonKmeans = new Fl_Button(237, 200, 125, 25, "Kmeans");
-    buttonStatMoyenne = new Fl_Button(425, 200, 125, 25, "Stat moyenne");
+    buttonEnergy = new Fl_Button(50, 100, 125, 25, "Energie");
+    buttonReuseImages = new Fl_Button(237, 100, 125, 25, "Image unique");
+    buttonAlignement = new Fl_Button(50, 150, 125, 25, "Alignement");
+    buttonKmeans = new Fl_Button(237, 150, 125, 25, "Kmeans");
+    buttonStatMoyenne = new Fl_Button(425, 150, 125, 25, "Stat moyenne");
     kmeansClusterSlider = new Fl_Value_Slider(175, 50, 250, 25, "Kmeans clusters");
     buttonMeanColor->color(FL_WHITE); 
     buttonMeanColor->labelcolor(FL_BLACK);
@@ -411,25 +448,49 @@ int main(int argc, char** argv )
     kmeansClusterSlider->bounds(1, 1000);
     kmeansClusterSlider->step(1);
     kmeansClusterSlider->value(400);
-    Fl_Button* buttonChoisirDataset = new Fl_Button(10, 300, 100, 25, "Choisir dataset");
+    Fl_Button* buttonChoisirDataset = new Fl_Button(10, 200, 100, 25, "Choisir dataset");
     Fl_Text_Buffer *buffdataset=new Fl_Text_Buffer();
     displayExistingPrecomputedDataset(buffdataset);
-    Fl_Text_Display *dispdataset = new Fl_Text_Display(120, 300, 400, 50);
+    Fl_Text_Display *dispdataset = new Fl_Text_Display(120, 200, 400, 50);
     std::map<Fl_Text_Buffer *,std::string> mapdataset{{buffdataset,datasetFolder}};
     buttonChoisirDataset->callback(fonctionChoisirDataset,&mapdataset);
     dispdataset->buffer(buffdataset);
-    Fl_Button* buttonChoisirImage = new Fl_Button(10, 400, 100, 25, "Choisir image");
+    Fl_Button* buttonChoisirImage = new Fl_Button(10, 275, 100, 25, "Choisir image");
     Fl_Text_Buffer *buff=new Fl_Text_Buffer();
-    Fl_Text_Display *disp = new Fl_Text_Display(120, 400, 400, 50);
-    Fl_Value_Input *blocSize = new Fl_Value_Input(125, 500, 50, 25, "Taille des blocs : ");
-    blocSize->value(16);
+    Fl_Text_Display *disp = new Fl_Text_Display(120, 275, 400, 50);
+    // Fl_Value_Input *blocSize = new Fl_Value_Input(125, 350, 50, 25, "Taille des blocs : ");
+    tailleSlider = new Fl_Value_Slider(130, 350, 250, 25);
+    tailleSlider->hide();
+    tailleSlider->type(FL_HOR_NICE_SLIDER);
+    tailleSlider->step(1);
+    tailleSlider->value(16);
+    Fl_Text_Buffer *buffTextBloc=new Fl_Text_Buffer();
+    Fl_Text_Display *dispTextBloc = new Fl_Text_Display(0, 350, 125, 30);
+    buffTextBloc->text("Taille des blocs :");
+    dispTextBloc->buffer(buffTextBloc);
+    dispTextBloc->color(FL_GRAY);
+    // blocSize->value(16);
+    Fl_Text_Buffer *buffTE=new Fl_Text_Buffer();
+    Fl_Text_Editor *dispTE = new Fl_Text_Editor(10, 400, 400, 30, "nom image");
+    dispTE->buffer(buffTE);
+    Fl_Choice* choice = new Fl_Choice(410, 400, 75, 30);
+    choice->add(".jpg");
+    choice->add(".jpeg");
+    choice->add(".png");
+    choice->value(0); 
+    Fl_Button* buttonChoisirDossier = new Fl_Button(10, 450, 100, 25, "Choisir dossier");
+    Fl_Text_Buffer *buffdossier=new Fl_Text_Buffer();
+    Fl_Text_Display *dispdossier = new Fl_Text_Display(110, 450, 400, 50);
+    dispdossier->buffer(buffdossier);
+    std::map<Fl_Text_Buffer *,std::string> mapdossier{{buffdossier,dossier}};
+    buttonChoisirDossier->callback(fonctionChoisirDataset,&mapdossier);
     std::map<Fl_Text_Buffer *,std::string> map{{buff,image}};
     buttonChoisirImage->callback(fonctionChoisirImage,&map);
     disp->buffer(buff);
-    Fl_Button* buttonVoirImage = new Fl_Button(10, 425, 100, 25, "Voir image");
+    Fl_Button* buttonVoirImage = new Fl_Button(10, 300, 100, 25, "Voir image");
     buttonVoirImage->callback(fonctionVoirImage);
-    Fl_Button* buttonCreerImage = new Fl_Button(250, 500, 100, 25, "Créer image");
-    MosaicParams bitArrayMap{"bitArray","",blocSize->value(),image};
+    Fl_Button* buttonCreerImage = new Fl_Button(250, 525, 100, 25, "Créer image");
+    MosaicParams bitArrayMap{buffTE->text(),choice->text(),tailleSlider->value(),image};
     buttonCreerImage->callback(fonctionButtonCreerImage,&bitArrayMap);
     // fileBrowser->load("/home/thibaut/Downloads/projet_image/Projet-mosaique-image/img");
     window->end();
