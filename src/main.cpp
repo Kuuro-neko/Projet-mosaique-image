@@ -265,6 +265,7 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
         imageFolder += "/Images";
     }
     Fl_File_Chooser *fileChooser=new Fl_File_Chooser(imageFolder.c_str(), NULL, Fl_File_Chooser::SINGLE, "images");
+    fileChooser->filter("Image Files (*.{jpeg,jpg,png})");
     fileChooser->show();
     while (fileChooser->shown()) {
         Fl::wait(); 
