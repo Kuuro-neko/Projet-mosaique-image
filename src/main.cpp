@@ -43,6 +43,7 @@ Fl_Button* buttonKmeans ;
 Fl_Button* buttonStatMoyenne ;
 Fl_Value_Slider* kmeansClusterSlider;
 Fl_Value_Slider* tailleSlider;
+Fl_Value_Input *blocSize;
 
 #include "includes/alignmentMosaic.hpp"
 #include "includes/meanFeatureMosaic.hpp"
@@ -294,6 +295,7 @@ void fonctionChoisirImage(Fl_Widget* widget, void* data) {
         tailleSlider->bounds(1, ow);
         tailleSlider->value(16);
         tailleSlider->show();
+        blocSize->show();
     }else{
         param->text("");
         image = "";
@@ -381,6 +383,7 @@ void fonctionVoirImage(Fl_Widget* widget, void* data) {
         Fl_Window* window = new Fl_Window(600, 600, "Aperçu image");
         Fl_Box* box = new Fl_Box(0, 0, 600, 600);
         box->image(to_display);
+        window->resizable(box);
         window->end();
         window->show();
     }
@@ -400,6 +403,22 @@ void displayExistingPrecomputedDataset(Fl_Text_Buffer *buff) {
 
     datasetSize = std::distance(fs::directory_iterator(datasetFolder), fs::directory_iterator{});
     kmeansClusterSlider->bounds(1, datasetSize);
+}
+
+void fonctionSliderBloc(Fl_Widget* widget, void* data) {
+    blocSize->value(tailleSlider->value());
+    blocSize->redraw();
+}
+
+void fonctionInputBloc(Fl_Widget* widget, void* data) {
+    if(blocSize->value()>tailleSlider->maximum()){
+        blocSize->value(tailleSlider->maximum());
+    }
+    if(blocSize->value()<tailleSlider->minimum()){
+        blocSize->value(tailleSlider->minimum());
+    }
+    tailleSlider->value(blocSize->value());
+    tailleSlider->redraw();
 }
 
 int main(int argc, char** argv )
@@ -460,12 +479,17 @@ int main(int argc, char** argv )
     Fl_Button* buttonChoisirImage = new Fl_Button(10, 275, 100, 25, "Choisir image");
     Fl_Text_Buffer *buff=new Fl_Text_Buffer();
     Fl_Text_Display *disp = new Fl_Text_Display(120, 275, 400, 50);
-    // Fl_Value_Input *blocSize = new Fl_Value_Input(125, 350, 50, 25, "Taille des blocs : ");
+    blocSize = new Fl_Value_Input(390, 350, 50, 30);
+    blocSize->hide();
+    blocSize->type(FL_INT_INPUT);
+    blocSize->value(16);
     tailleSlider = new Fl_Value_Slider(140, 350, 250, 30);
     tailleSlider->hide();
     tailleSlider->type(FL_HOR_NICE_SLIDER);
     tailleSlider->step(1);
     tailleSlider->value(16);
+    blocSize->callback(fonctionInputBloc);
+    tailleSlider->callback(fonctionSliderBloc);
     Fl_Text_Buffer *buffTextBloc=new Fl_Text_Buffer();
     Fl_Text_Display *dispTextBloc = new Fl_Text_Display(10, 350, 125, 30);
     buffTextBloc->text("Taille des blocs :");
