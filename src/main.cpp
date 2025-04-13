@@ -231,7 +231,7 @@ void fonctionButtonCreerImage(Fl_Widget* widget, void* data) {
     std::map<std::string, StatisticalFeatures> meanValues = checkIfAlreadyPreProcessed(param->datasetPath);
     cv::Mat mosaic;
     if(K){
-        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, kmeansCluster);
+        mosaic=generateMosaicWithKMeans(inputImage, meanValues, param->blockSize, params, kmeansCluster, progressBar);
     }
     else if(A){
         if (IU)

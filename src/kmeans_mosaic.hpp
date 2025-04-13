@@ -6,12 +6,16 @@
 #include <string>
 #include "statistical_features.hpp"
 
+#include <FL/Fl.H>
+#include <FL/Fl_Progress.H>
+
 cv::Mat generateMosaicWithKMeans(
     const cv::Mat& inputImage,
     std::map<std::string, StatisticalFeatures>& datasetStats,
     int blockSize,
     GenerateMosaicParams params,
-    int k
+    int k,
+    Fl_Progress* progressBar
 );
 
 #endif // KMEANS_MOSAIC_HPP

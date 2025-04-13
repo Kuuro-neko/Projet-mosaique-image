@@ -80,7 +80,8 @@ cv::Mat generateMosaicWithKMeans(
     std::map<std::string, StatisticalFeatures>& datasetStats,
     int blockSize,
     GenerateMosaicParams params,
-    int k
+    int k,
+    Fl_Progress* progressBar
 ) {
     std::vector<std::string> filenames;
     cv::Mat featureMatrix = buildFeatureMatrix(datasetStats, params, filenames);
@@ -172,6 +173,7 @@ cv::Mat generateMosaicWithKMeans(
         }
 
         std::cout << "Progress : " << int((i * colBlocks) / float(rowBlocks * colBlocks) * 100) << "%" << std::flush << "\r";
+        progressBar->value((i * colBlocks) / float(rowBlocks * colBlocks));
     }
 
     std::cout << "Progress : 100%" << std::endl;
